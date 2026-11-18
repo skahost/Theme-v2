@@ -1,0 +1,182 @@
+@import 'tailwindcss/theme.css' layer(theme) prefix(drift);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(drift);
+@import '@pterodactyl/sdk/theme.css';
+@source './**/*.{ts,tsx}';
+
+/* Single sign-on buttons. Plain, extension-specific selectors (no Tailwind utilities). */
+.drift-sso-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    width: 100%;
+    height: 3rem;
+    border-radius: var(--radius, 0.5rem);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: filter 0.15s, transform 0.15s;
+}
+.drift-sso-btn:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+.drift-sso-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+.drift-sso-btn-google {
+    color: #1f1f1f;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.drift-sso-btn-google:hover {
+    color: #1f1f1f;
+    filter: brightness(0.96);
+}
+.drift-sso-btn-discord {
+    color: #ffffff;
+    background: #5865f2;
+}
+.drift-sso-btn-discord:hover {
+    color: #ffffff;
+}
+
+/* Sign-up form field settings: Required / Optional / Hidden buttons. */
+.drift-mode-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--border);
+}
+.drift-mode-group {
+    display: inline-flex;
+    flex: none;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 0.5rem);
+}
+.drift-mode-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+}
+.drift-mode-btn:last-child {
+    border-right: 0;
+}
+.drift-mode-btn:hover:not(:disabled):not([aria-pressed='true']) {
+    color: var(--foreground);
+}
+.drift-mode-btn[aria-pressed='true'] {
+    color: var(--primary-foreground);
+    background: var(--primary);
+}
+.drift-mode-btn[aria-pressed='true'][data-mode='hidden'] {
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+}
+.drift-mode-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.drift-mode-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+
+/* Floating glass section bar on the admin page. */
+.drift-nav {
+    position: sticky;
+    top: var(--drift-nav-top, 4.75rem);
+    z-index: 30;
+    justify-self: center;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 0.3rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: color-mix(in oklab, var(--card) 55%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    backdrop-filter: blur(14px) saturate(1.5);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+    border-radius: 9999px;
+    box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.drift-nav::-webkit-scrollbar {
+    display: none;
+}
+.drift-nav-link {
+    flex: none;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+    background: transparent;
+    border: 0;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+.drift-nav-link:hover {
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.drift-nav-link[aria-current='true'] {
+    color: var(--primary-foreground);
+    background: color-mix(in oklab, var(--primary) 85%, transparent);
+    box-shadow: 0 2px 10px -2px color-mix(in oklab, var(--primary) 60%, transparent);
+}
+.drift-nav-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+}
+.drift-nav-sep {
+    flex: none;
+    width: 1px;
+    height: 1.25rem;
+    margin: 0 0.25rem;
+    background: color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+.drift-nav-save {
+    flex: none;
+    padding: 0.35rem 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--primary-foreground);
+    background: var(--primary);
+    border: 0;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: filter 0.15s, opacity 0.15s;
+}
+.drift-nav-save:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+.drift-nav-save:disabled {
+    cursor: progress;
+    opacity: 0.6;
+}
+.drift-nav-save:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+}
+.drift-section {
+    scroll-margin-top: calc(var(--drift-nav-top, 4.75rem) + 3.5rem);
+}
+@media (prefers-reduced-motion: reduce) {
+    .drift-nav-link {
+        transition: none;
+    }
+}

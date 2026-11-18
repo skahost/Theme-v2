@@ -1,0 +1,46 @@
+{
+    "$schema": "./node_modules/@pterodactyl/sdk/manifest.schema.json",
+    "id": "drift-register",
+    "name": "Drift Register",
+    "version": "1.6.2",
+    "requires": {
+        "panel": "^2.0.0-dev",
+        "sdk": "^2.0.0-beta.4",
+        "php": "^8.3"
+    },
+    "description": "Self-service registration, Google and Discord single sign-on, and optional Cloudflare Turnstile protection.",
+    "author": "Drift",
+    "icon": "resources/icon.png",
+    "provider": "DriftRegister\\DriftRegisterProvider",
+    "routes": {
+        "root": [
+            "register"
+        ]
+    },
+    "ui": {
+        "entry": "dist/client.js",
+        "mode": "native",
+        "prefix": "drift",
+        "screens": [
+            {
+                "id": "config",
+                "area": "admin",
+                "path": "drift-register",
+                "nav": {
+                    "label": "Drift Register",
+                    "icon": "user-plus"
+                }
+            },
+            {
+                "id": "user",
+                "area": "admin",
+                "parent": "admin.user",
+                "path": "drift-register",
+                "nav": {
+                    "label": "Drift Register",
+                    "icon": "id-card"
+                }
+            }
+        ]
+    }
+}

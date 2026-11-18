@@ -1,0 +1,11 @@
+{
+    "description": "Self-service registration, Google / Discord single sign-on, and optional Cloudflare Turnstile protection.",
+    "autoload": {
+        "psr-4": {
+            "DriftRegister\\": "src/"
+        }
+    },
+    "config": {
+        "autoloader-suffix": "DriftRegisterExtension"
+    }
+}
