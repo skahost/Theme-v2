@@ -1,20 +1,21 @@
-# Vizion Suite Bundle
+# Vizion Suite Packages
 
-This bundle contains the current Vizion theme and separately installable native
-Pterodactyl extensions:
+`vizion-suite-bundle.zip` is the earlier multi-package release. The current
+single-upload package is [`vizionas.pteroext`](../vizionas.pteroext), which
+contains the Vizion theme and its native extension manager.
 
-- `vizion.pteroext` is the current Vizion theme package.
-- `extensions/*.pteroext` are independent extension packages from the supplied
-  `Telegram.zip`. Drift Register is updated to version 1.6.2 with Cloudflare
-  Turnstile support.
+After installing and enabling `vizionas.pteroext`, open **Vizion Extension** in
+the admin menu. Its first load installs or updates the bundled extensions.
+They remain disabled until enabled individually. **Configure** opens
+Pterodactyl's native Extensions manager for each extension's settings.
 
-Install Vizion and each extension separately through the panel's extension
-manager. Each extension retains its own settings, permissions, routes, and
-database migrations; installing this ZIP does not install them automatically.
+The package includes 23 native extensions from the supplied `Telegram.zip`,
+including Drift Register 1.6.2 with Cloudflare Turnstile. Their routes,
+permissions, migrations, and settings remain separate native extension
+packages. Two colliding Tailwind prefixes were made unique so those packages
+can be enabled together.
 
-The Branding extension is not redistributed here because its package license
-prohibits redistribution. The other supplied extension packages are included.
+The Branding extension is not redistributed because its package license
+prohibits redistribution.
 
-The Vizion theme package is unchanged in this bundle. Its React/TypeScript
-sources were not supplied, so its compiled settings UI and navigation could not
-be safely extended with a feature hub or additional editor controls.
+Rebuild the single-upload package with `python3 scripts/build_vizionas.py`.
