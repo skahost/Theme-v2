@@ -21,6 +21,10 @@ in Pterodactyl's native Themes manager does not trigger the bundled extensions'
 master switch.
 The bundled extensions are filtered out of the global Admin → Extensions list;
 their settings and management remain available from the Vizion Extension hub.
+The theme editor also includes server-rendered Open Graph, Twitter, favicon, and
+theme-color tags, an indexing switch, configurable social links, an optional live
+Discord widget, and announcement/CTA controls. Its dashboard-style preview is
+rendered locally at a reduced scale rather than loaded through an iframe.
 
 The package includes 23 native extensions from the supplied `Telegram.zip`,
 including Register 1.6.3 with Cloudflare Turnstile. The four Drift extensions
