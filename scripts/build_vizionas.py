@@ -92,19 +92,21 @@ def patch_vizion_provider(provider: bytes) -> bytes:
             ExtensionSettingDefinition::make('allowIndexing', 'allowIndexing', false)
                 ->field('toggle')->label('Allow to be indexed')
                 ->help('Allow search engines to index the panel and show it in search results.')
-                ->tab('SEO & Social'),
+                ->normalizeUsing($this->invalidateHeadTags(...))->tab('SEO & Social'),
             ExtensionSettingDefinition::make('metaThemeColor', 'metaThemeColor', '#101114')
                 ->color()->normalizeUsing($this->invalidateHeadTags(...))
                 ->label('Meta Color')->tab('SEO & Social'),
+            ExtensionSettingDefinition::make('baseColor', 'baseColor', '#21163a')
+                ->color()->frontend()->public()->label('Base/Card Background Color')->tab('Appearance'),
             ExtensionSettingDefinition::make('socialLinks', 'socialLinks', [])
                 ->list(['max:2048'], 16)->frontend()->public()
-                ->label('Social Buttons')->tab('SEO & Social'),
+                ->label('Social Buttons')->tab('Social & Logins'),
             ExtensionSettingDefinition::make('discordEnabled', 'discordEnabled', false)
-                ->field('toggle')->frontend()->public()->label('Show Discord Box')->tab('SEO & Social'),
+                ->field('toggle')->frontend()->public()->label('Show Discord Box')->tab('Social & Logins'),
             ExtensionSettingDefinition::make('discordGuildId', 'discordGuildId', '', ['nullable', 'string', 'regex:/^[0-9]{1,24}$/'])
-                ->field('text')->frontend()->public()->label('Discord Guild ID')->tab('SEO & Social'),
+                ->field('text')->frontend()->public()->label('Discord Guild ID')->tab('Social & Logins'),
             ExtensionSettingDefinition::make('discordInvite', 'discordInvite', '', ['nullable', 'url', 'max:2048'])
-                ->field('text')->frontend()->public()->label('Discord Invite Link')->tab('SEO & Social'),
+                ->field('text')->frontend()->public()->label('Discord Invite Link')->tab('Social & Logins'),
             ExtensionSettingDefinition::make('announcementPosition', 'announcementPosition', 'top')
                 ->field('select', [['value' => 'header', 'label' => 'Header'], ['value' => 'top', 'label' => 'Top']])
                 ->frontend()->public()->label('Position')->tab('Dashboard'),
@@ -145,6 +147,26 @@ def patch_vizion_provider(provider: bytes) -> bytes:
         1,
     )
 
+    tags_end = (
+        "            ['tag' => 'meta', 'name' => 'twitter:title', 'content' => $title],\n"
+        "        ];\n\n        if ($description !== '') {"
+    )
+    gated_tags_end = (
+        "            ['tag' => 'meta', 'name' => 'twitter:title', 'content' => $title],\n"
+        "        ];\n\n"
+        "        if ($settings->get('allowIndexing', false) !== true) {\n"
+        "            $tags = [['tag' => 'meta', 'name' => 'theme-color', 'content' => $themeColor]];\n"
+        "            if (is_string($favicon)) {\n"
+        "                $tags[] = ['tag' => 'link', 'rel' => 'icon', 'href' => secure_url($favicon)];\n"
+        "            }\n\n"
+        "            return $tags;\n"
+        "        }\n\n"
+        "        if ($description !== '') {"
+    )
+    if source.count(tags_end) != 1:
+        raise ValueError("Could not locate Vizion SEO tag list end.")
+    source = source.replace(tags_end, gated_tags_end, 1)
+
     description_tag = "['tag' => 'meta', 'property' => 'og:description', 'content' => $description]"
     if source.count(description_tag) != 1:
         raise ValueError("Could not locate the existing Open Graph description tag.")
@@ -159,7 +181,7 @@ def patch_theme_settings_store(settings: bytes) -> bytes:
         "announcementEnabled:!1,announcementPosition:`top`,announcementColor:`#21163a`,"
         "announcementIcon:`megaphone`,announcementDismissible:!0,ctaColor:`#8b5cf6`,"
         "ctaTitle:``,ctaUrl:``,socialLinks:[],discordEnabled:!1,discordGuildId:``,"
-        "discordInvite:``,metaThemeColor:`#101114`,glassmorphism:!0"
+        "discordInvite:``,metaThemeColor:`#101114`,baseColor:`#21163a`,glassmorphism:!0"
     )
     if source.count(default_marker) != 1:
         raise ValueError("Could not locate Vizion frontend settings defaults.")
@@ -177,23 +199,60 @@ def patch_theme_settings_store(settings: bytes) -> bytes:
         "socialLinks:Array.isArray(r.socialLinks)?r.socialLinks:[],"
         "discordEnabled:r.discordEnabled===!0,discordGuildId:a(r.discordGuildId)?r.discordGuildId:``,"
         "discordInvite:a(r.discordInvite)?r.discordInvite:``,"
-        "metaThemeColor:a(r.metaThemeColor)?r.metaThemeColor:`#101114`,glassmorphism:"
+        "metaThemeColor:a(r.metaThemeColor)?r.metaThemeColor:`#101114`,"
+        "baseColor:a(r.baseColor)?r.baseColor:`#21163a`,glassmorphism:"
     )
     if source.count(normalize_marker) != 1:
         raise ValueError("Could not locate Vizion frontend settings normalization.")
     source = source.replace(normalize_marker, normalized, 1)
 
+    accent_style = "t.style.setProperty(`--vizion-accent`,e.accent),"
+    if source.count(accent_style) != 1:
+        raise ValueError("Could not locate Vizion root color variables.")
+    source = source.replace(
+        accent_style,
+        "t.style.setProperty(`--vizion-base-color`,e.baseColor),"+accent_style,
+        1,
+    )
+
     return source.encode()
 
 
+def patch_theme_stylesheet(stylesheet: bytes) -> bytes:
+    source = stylesheet.decode()
+    marker = "/* Vizion base color variable overrides */"
+    if marker in source:
+        raise ValueError("Vizion base color overrides were already applied.")
+
+    return (
+        source.rstrip()
+        + "\n\n"
+        + marker
+        + """
+:root,
+.dark,
+.light {
+    --background: color-mix(in srgb, var(--vizion-base-color, #21163a) 76%, #000 24%);
+    --card: var(--vizion-base-color, #21163a);
+    --popover: color-mix(in srgb, var(--vizion-base-color, #21163a) 88%, #fff 12%);
+    --muted: color-mix(in srgb, var(--vizion-base-color, #21163a) 82%, #fff 18%);
+    --secondary: color-mix(in srgb, var(--vizion-base-color, #21163a) 76%, #fff 24%);
+    --border: color-mix(in srgb, var(--vizion-base-color, #21163a) 68%, #fff 32%);
+    --sidebar: color-mix(in srgb, var(--vizion-base-color, #21163a) 90%, #000 10%);
+}
+"""
+    ).encode()
+
+
 def patch_settings_page(page: bytes) -> bytes:
-    source = page.decode()
+    source = 'import{View as PreviewView}from"@pterodactyl/sdk/theme";' + page.decode()
 
     state_defaults = (
         "metaDescription:``,seoBanner:null,announcement:``,announcementEnabled:!1,"
     )
     extended_defaults = (
         "metaDescription:``,seoBanner:null,allowIndexing:!1,metaThemeColor:`#101114`,"
+        "baseColor:`#21163a`,"
         "socialLinks:[],discordEnabled:!1,discordGuildId:``,discordInvite:``,"
         "announcement:``,announcementEnabled:!1,announcementPosition:`top`,"
         "announcementColor:`#21163a`,announcementIcon:`megaphone`,"
@@ -210,6 +269,7 @@ def patch_settings_page(page: bytes) -> bytes:
     extended_mapping = (
         "metaDescription:n(`metaDescription`),seoBanner:r(`seoBanner`),"
         "allowIndexing:t.get(`allowIndexing`)===!0,metaThemeColor:n(`metaThemeColor`)||`#101114`,"
+        "baseColor:n(`baseColor`)||`#21163a`,"
         "socialLinks:Array.isArray(t.get(`socialLinks`))?t.get(`socialLinks`):[],"
         "discordEnabled:t.get(`discordEnabled`)===!0,discordGuildId:n(`discordGuildId`),"
         "discordInvite:n(`discordInvite`),announcement:n(`announcement`),"
@@ -259,7 +319,7 @@ def patch_settings_page(page: bytes) -> bytes:
     )
     extended_save = (
         "settings:{metaTitle:t.metaTitle,metaDescription:t.metaDescription,"
-        "allowIndexing:t.allowIndexing,metaThemeColor:t.metaThemeColor,socialLinks:t.socialLinks,"
+        "allowIndexing:t.allowIndexing,metaThemeColor:t.metaThemeColor,baseColor:t.baseColor,socialLinks:t.socialLinks,"
         "discordEnabled:t.discordEnabled,discordGuildId:t.discordGuildId,discordInvite:t.discordInvite,"
         "logoHeight:t.logoHeight,announcement:t.announcement,announcementEnabled:t.announcementEnabled,"
         "announcementPosition:t.announcementPosition,announcementColor:t.announcementColor,"
@@ -281,6 +341,7 @@ def patch_settings_page(page: bytes) -> bytes:
     local_preview = (
         "Z=i(()=>{let e=document.documentElement;"
         "e.style.setProperty(`--vizion-accent`,t.accent);"
+        "e.style.setProperty(`--vizion-base-color`,t.baseColor);"
         "e.style.setProperty(`--vizion-blur`,`${t.blur}px`);"
         "e.style.setProperty(`--vizion-logo-height`,`${t.logoHeight}px`);"
         "e.setAttribute(`data-vizion-glass`,String(t.glassmorphism));"
@@ -290,6 +351,26 @@ def patch_settings_page(page: bytes) -> bytes:
     )
     source = source[:preview_begin] + local_preview + source[preview_finish:]
     source = source.replace("&&J.current?.contentWindow?.location.reload()", "", 2)
+
+    appearance_marker = (
+        "`Accent color`,l(`input`,{id:`vizion-accent`,type:`color`,value:t.accent,"
+        "onChange:e=>X(`accent`,e.currentTarget.value),className:`block h-11 w-full cursor-pointer "
+        "rounded-lg border border-border bg-background p-1`})]}),l(m,"
+    )
+    appearance_controls = (
+        "`Accent color`,l(`input`,{id:`vizion-accent`,type:`color`,value:t.accent,"
+        "onChange:e=>X(`accent`,e.currentTarget.value),className:`block h-11 w-full cursor-pointer "
+        "rounded-lg border border-border bg-background p-1`})]}),"
+        "u(`label`,{className:`block space-y-2 text-sm font-medium`,children:[`Base/Card Background Color`,"
+        "u(`div`,{className:`flex items-center gap-3`,children:["
+        "l(`input`,{type:`color`,value:t.baseColor,onChange:e=>X(`baseColor`,e.currentTarget.value),"
+        "className:`size-11 cursor-pointer rounded-lg border border-border bg-background p-1`}),"
+        "l(p,{value:t.baseColor,onChange:e=>X(`baseColor`,e.currentTarget.value),"
+        "maxLength:64,className:`font-mono uppercase`,placeholder:`#21163a`})]})]}),l(m,"
+    )
+    if source.count(appearance_marker) != 1:
+        raise ValueError("Could not locate Vizion appearance color controls.")
+    source = source.replace(appearance_marker, appearance_controls, 1)
 
     seo_start = "f===`seo`&&u(H,{title:`SEO & social sharing`,children:["
     seo_end = ",f===`layout`&&u(H,{title:`Dashboard layout`"
@@ -347,7 +428,40 @@ def patch_settings_page(page: bytes) -> bytes:
             ]})
         ]})
     ]})"""
+    social_start = "        u(H,{title:`Social Buttons`,children:["
+    discord_start = "        u(H,{title:`Discord Box`,children:["
+    seo_close = "\n    ]})"
+    if (
+        seo_content.count(social_start) != 1
+        or seo_content.count(discord_start) != 1
+        or seo_content.count(seo_close) != 1
+    ):
+        raise ValueError("Could not separate the Vizion social settings from SEO.")
+    social_begin = seo_content.index(social_start)
+    discord_begin = seo_content.index(discord_start, social_begin)
+    social_end = seo_content.rindex(seo_close)
+    social_buttons = seo_content[social_begin:discord_begin].strip().rstrip(",")
+    discord_box = seo_content[discord_begin:social_end].strip().rstrip(",")
+    seo_content = seo_content[:social_begin] + seo_content[social_end:]
+    social_content = (
+        "f===`social`&&u(H,{title:`Social & Logins`,children:["
+        + social_buttons
+        + ","
+        + discord_box
+        + "]})"
+    )
     source = source[:start] + seo_content + source[end:]
+    tab_marker = "{id:`seo`,label:`SEO & social`,icon:n},{id:`layout`"
+    if source.count(tab_marker) != 1:
+        raise ValueError("Could not locate the Vizion settings sidebar tabs.")
+    source = source.replace(
+        tab_marker,
+        "{id:`seo`,label:`SEO`,icon:n},{id:`social`,label:`Social & Logins`,icon:n},{id:`layout`",
+        1,
+    )
+    if source.count(seo_end) != 1:
+        raise ValueError("Could not locate the Vizion dashboard layout tab.")
+    source = source.replace(seo_end, "," + social_content + seo_end, 1)
 
     layout_marker = (
         "l(m,{checked:t.announcementEnabled,onChange:e=>X(`announcementEnabled`,e),"
@@ -402,6 +516,15 @@ def patch_settings_page(page: bytes) -> bytes:
         t.announcementEnabled&&u(`div`,{className:`flex items-center justify-between gap-3 px-5 py-3 text-sm`,style:{backgroundColor:t.announcementColor,color:`white`},children:[l(`span`,{children:[t.announcementIcon!==`none`?`${t.announcementIcon}  `:``,t.announcement||`Your announcement appears here.`]}),t.ctaTitle&&l(`span`,{className:`rounded-md px-3 py-1.5 text-xs font-semibold`,style:{backgroundColor:t.ctaColor},children:t.ctaTitle})]}),
         u(`div`,{className:`grid min-h-[700px] grid-cols-[150px_1fr]`,children:[u(`aside`,{className:`space-y-3 border-r border-border p-4 text-xs text-muted-foreground`,children:[l(`div`,{className:`mb-5 h-7 rounded bg-muted`}),l(`p`,{children:`Dashboard`}),l(`p`,{children:`Account`}),l(`p`,{children:`Servers`})]}),u(`main`,{className:`space-y-5 p-6`,children:[u(`div`,{children:[l(`p`,{className:`text-xs text-muted-foreground`,children:`Welcome back`}),l(`h2`,{className:`mt-1 text-2xl font-semibold`,children:`Your servers`})]}),u(`div`,{className:`grid gap-3 sm:grid-cols-2`,children:[1,2,3,4].map(e=>u(`div`,{className:`rounded-xl border border-border bg-card p-4`,children:[l(`div`,{className:`mb-3 size-8 rounded-lg bg-primary/20`}),l(`div`,{className:`h-3 w-2/3 rounded bg-muted`}),l(`div`,{className:`mt-3 h-2 w-1/2 rounded bg-muted/60`})]},e))}),l(`div`,{className:`h-28 rounded-xl border border-border bg-card`})]})]})
     ]})})})]})]})}"""
+    preview = (
+        "l(`div`,{className:`flex min-h-[65dvh] flex-1 justify-center overflow-hidden rounded-2xl "
+        "border border-border/70 bg-background/40 p-3 sm:p-6 xl:min-h-0`,style:{overflow:`auto`},"
+        "children:l(`div`,{className:`origin-top-left transition-[transform,width] duration-300`,"
+        "style:{width:b===`mobile`?`646px`:`153.8462%`,transform:`scale(.65)`,"
+        "transformOrigin:`top left`,pointerEvents:`none`},'aria-hidden':!0,"
+        "children:l(PreviewView,{name:`layout.app`,children:l(PreviewView,{name:`page.dashboard`})})})})"
+        "]})]})}"
+    )
     source = source[:preview_begin] + preview + source[preview_finish:]
 
     if "l(`iframe`" in source or "u(`iframe`" in source:
@@ -486,7 +609,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.8"
+        manifest["version"] = "1.1.9"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
@@ -558,6 +681,9 @@ def main() -> None:
 
         store_info, store = entries["dist/chunk.settings.sdDqqCB1.js"]
         entries["dist/chunk.settings.sdDqqCB1.js"] = (store_info, patch_theme_settings_store(store))
+        for stylesheet_path in ("dist/theme.css", "dist/theme-source.css"):
+            stylesheet_info, stylesheet = entries[stylesheet_path]
+            entries[stylesheet_path] = (stylesheet_info, patch_theme_stylesheet(stylesheet))
 
         settings_info, settings = entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"]
         settings = patch_settings_page(settings).decode()
@@ -590,6 +716,7 @@ def main() -> None:
         )
         overlay_marker = "function C({model:e,children:t})"
         overlay = """function E(e){try{let t=new URL(e);return[`https:`,`http:`].includes(t.protocol)?t.href:null}catch{return null}}
+function socialIcon(e){let t={globe:`M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18`,discord:`M8 7.5a11 11 0 0 1 8 0l1 1.5 1.5 8a12 12 0 0 1-4 2l-1-1.5M8 7.5 7 9l-1.5 8a12 12 0 0 0 4 2l1-1.5M9 13h.01M15 13h.01`,github:`M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22`,youtube:`M22.54 6.42a2.78 2.78 0 0 0-1.95-1.97C18.88 4 12 4 12 4s-6.88 0-8.59.45a2.78 2.78 0 0 0-1.95 1.97A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.97C5.12 20 12 20 12 20s6.88 0 8.59-.45a2.78 2.78 0 0 0 1.95-1.97A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58ZM10 15.5v-7l6 3.5-6 3.5Z`,instagram:`M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm5 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm5.5-.5h.01`}[e]||`M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18`;return s(`svg`,{viewBox:`0 0 24 24`,fill:`none`,stroke:`currentColor`,strokeWidth:`1.8`,className:`size-4`,children:s(`path`,{d:t,strokeLinecap:`round`,strokeLinejoin:`round`})})}
 function A(){let{pathname:e}=f(),t=r(),[n,i]=Se(!1);Ve(()=>{i(!1)},[e,t.announcement]);if(e!==`/`&&e!==`/panel`)return null;let a=E(t.ctaUrl),invite=E(t.discordInvite),s=Array.isArray(t.socialLinks)?t.socialLinks.flatMap(e=>{if(typeof e!==`string`)return[];try{let t=JSON.parse(e);return t&&typeof t.title===`string`&&typeof t.url===`string`&&E(t.url)?[{...t,url:E(t.url)}]:[]}catch{return[]}}):[],discordReady=t.discordEnabled&&/^\\d{1,24}$/.test(t.discordGuildId);return c(o,{children:[
 t.announcementEnabled&&!n&&c(`div`,{className:`fixed ${t.announcementPosition===`header`?`top-16`:`top-3`} left-1/2 z-[80] flex w-[min(94vw,900px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm text-white shadow-2xl`,style:{backgroundColor:t.announcementColor},children:[
 l(`span`,{className:`shrink-0`,children:t.announcementIcon===`megaphone`?`📣`:t.announcementIcon===`sparkles`?`✦`:t.announcementIcon===`info`?`ⓘ`:``}),
@@ -597,7 +724,7 @@ l(`p`,{className:`min-w-0 flex-1`,children:t.announcement}),
 a&&t.ctaTitle&&l(`a`,{href:a,target:`_blank`,rel:`noopener noreferrer`,className:`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold text-white`,style:{backgroundColor:t.ctaColor},children:t.ctaTitle}),
 t.announcementDismissible&&l(`button`,{type:`button`,"aria-label":`Dismiss announcement`,onClick:()=>i(!0),className:`shrink-0 rounded-md px-2 py-1 text-white/80 hover:bg-white/10`,children:`×`})
 ]}),
-s.length>0&&c(`nav`,{"aria-label":`Social links`,className:`fixed bottom-5 left-5 z-[70] flex flex-wrap gap-2`,children:s.map((e,t)=>l(`a`,{href:e.url,target:`_blank`,rel:`noopener noreferrer`,title:e.description||e.title,className:`glass rounded-full px-3 py-2 text-xs font-medium text-foreground shadow-lg`,children:[e.icon?`${e.icon} · `:``,e.title]},`${e.url}-${t}`))}),
+s.length>0&&c(`nav`,{"aria-label":`Social links`,className:`fixed bottom-5 left-5 z-[70] flex flex-wrap gap-2`,children:s.map((e,t)=>l(`a`,{href:e.url,target:`_blank`,rel:`noopener noreferrer`,title:e.description||e.title,className:`glass inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium text-foreground shadow-lg`,children:[socialIcon(e.icon),e.title]},`${e.url}-${t}`))}),
 discordReady&&c(`section`,{className:`fixed bottom-5 right-5 z-[70] w-[min(92vw,320px)] overflow-hidden rounded-xl border border-border bg-card shadow-2xl`,children:[
 c(`header`,{className:`flex items-center justify-between gap-3 border-b border-border p-3`,children:[l(`span`,{className:`font-semibold`,children:`Discord Community`}),invite&&l(`a`,{href:invite,target:`_blank`,rel:`noopener noreferrer`,className:`rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground`,children:`Join`})]}),
 l(`iframe`,{title:`Live Discord server members`,src:`https://discord.com/widget?id=${encodeURIComponent(t.discordGuildId)}&theme=dark`,width:`320`,height:`360`,allowTransparency:!0,sandbox:`allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts`,className:`block w-full border-0`}),
@@ -608,6 +735,12 @@ l(`p`,{className:`px-3 py-2 text-xs text-muted-foreground`,children:`Live member
         if shell.count(overlay_marker) != 1:
             raise ValueError("Could not locate Vizion dashboard shell component.")
         shell = shell.replace(overlay_marker, overlay + overlay_marker, 1)
+        header_actions = "!l&&s(S,{model:e,showActions:o}),"
+        sidebar_visibility = "!o&&!l&&c(`aside`"
+        if shell.count(header_actions) != 1 or shell.count(sidebar_visibility) != 1:
+            raise ValueError("Could not locate the Vizion admin header and sidebar controls.")
+        shell = shell.replace(header_actions, "!l&&s(S,{model:e,showActions:!1}),", 1)
+        shell = shell.replace(sidebar_visibility, "!l&&c(`aside`", 1)
         main_mount = "s(i,{className:`min-w-0 flex-1`,children:t})"
         if shell.count(main_mount) != 1:
             raise ValueError("Could not locate Vizion dashboard content mount.")

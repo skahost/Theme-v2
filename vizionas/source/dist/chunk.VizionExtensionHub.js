@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { jsx, jsxs } from 'react/jsx-runtime';
-import { Button, http, httpErrorToHuman } from '@pterodactyl/sdk';
+import {
+    Alert,
+    Button,
+    Dialog,
+    FileInput,
+    http,
+    httpErrorToHuman,
+    Input,
+    NumberInput,
+    Select,
+    Spinner,
+    SpinnerOverlay,
+    Switch,
+    TextArea,
+} from '@pterodactyl/sdk';
 
 const bundledIds = [
     'drift-register',
@@ -28,6 +42,8 @@ const bundledIds = [
     'votifier-tester',
 ];
 
+const extensionErrorToHuman = (cause) => httpErrorToHuman(cause).replace(/\bdrift[-\s]+/gi, '');
+
 export default function VizionExtensionHub() {
     const [extensions, setExtensions] = useState([]);
     const [master, setMaster] = useState(null);
@@ -42,6 +58,7 @@ export default function VizionExtensionHub() {
     const [configSaving, setConfigSaving] = useState(false);
     const [configError, setConfigError] = useState(null);
     const [configNotice, setConfigNotice] = useState(null);
+    const [configSection, setConfigSection] = useState(null);
 
     useEffect(() => {
         let mounted = true;
@@ -59,7 +76,7 @@ export default function VizionExtensionHub() {
             })
             .catch((cause) => {
                 if (mounted) {
-                    setError(httpErrorToHuman(cause));
+                    setError(extensionErrorToHuman(cause));
                 }
             })
             .finally(() => {
@@ -102,11 +119,12 @@ export default function VizionExtensionHub() {
             setConfigValues({});
             setConfigError(null);
             setConfigNotice(null);
+            setConfigSection(null);
             setConfigLoading(true);
             try {
                 await loadConfig(id);
             } catch (cause) {
-                setConfigError(httpErrorToHuman(cause));
+                setConfigError(extensionErrorToHuman(cause));
             } finally {
                 setConfigLoading(false);
             }
@@ -144,7 +162,7 @@ export default function VizionExtensionHub() {
             await loadConfig(configuring);
             setConfigNotice('Settings saved.');
         } catch (cause) {
-            setConfigError(httpErrorToHuman(cause));
+            setConfigError(extensionErrorToHuman(cause));
         } finally {
             setConfigSaving(false);
         }
@@ -163,7 +181,7 @@ export default function VizionExtensionHub() {
                 );
                 await loadConfig(configuring);
             } catch (cause) {
-                setConfigError(httpErrorToHuman(cause));
+                setConfigError(extensionErrorToHuman(cause));
             } finally {
                 setConfigSaving(false);
             }
@@ -181,7 +199,7 @@ export default function VizionExtensionHub() {
                 );
                 await loadConfig(configuring);
             } catch (cause) {
-                setConfigError(httpErrorToHuman(cause));
+                setConfigError(extensionErrorToHuman(cause));
             } finally {
                 setConfigSaving(false);
             }
@@ -193,65 +211,144 @@ export default function VizionExtensionHub() {
         const value = Object.prototype.hasOwnProperty.call(configValues, field.input)
             ? configValues[field.input]
             : field.value;
-        const common = {
-            className: 'mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground',
-            'aria-label': field.label || field.input,
-            disabled: configSaving,
-            onChange: (event) => updateConfigValue(field, event.currentTarget.value),
-        };
 
         if (field.field === 'toggle') {
-            return jsx('input', {
-                type: 'checkbox',
+            return jsx(Switch, {
                 checked: value === true,
                 disabled: configSaving,
-                onChange: (event) => updateConfigValue(field, event.currentTarget.checked),
+                onChange: (next) => updateConfigValue(field, next),
+                label: field.label || field.input,
+                description: field.help,
             });
         }
         if (field.field === 'select' || field.field === 'multiselect') {
             const multiple = field.field === 'multiselect';
-            return jsx('select', {
-                ...common,
+            return jsx(Select, {
                 multiple,
-                value: multiple ? (Array.isArray(value) ? value.map(String) : []) : value ?? '',
-                onChange: (event) => {
+                disabled: configSaving,
+                value: multiple
+                    ? Array.isArray(value)
+                        ? value
+                        : []
+                    : value ?? null,
+                options: (field.options ?? []).map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                })),
+                onChange: (selected) => {
                     if (!multiple) {
-                        const selected = field.options?.find(
-                            (option) => String(option.value) === event.currentTarget.value
+                        updateConfigValue(
+                            field,
+                            field.options?.find((option) => option.value === selected)?.value ?? selected
                         );
-                        updateConfigValue(field, selected?.value ?? event.currentTarget.value);
-                        return;
+                    } else {
+                        updateConfigValue(field, selected);
                     }
-
-                    updateConfigValue(
-                        field,
-                        Array.from(event.currentTarget.selectedOptions, (selectedOption) =>
-                            field.options?.find((option) => String(option.value) === selectedOption.value)?.value ??
-                            selectedOption.value
-                        )
-                    );
                 },
-                children: field.options?.map((option) =>
-                    jsx('option', { value: String(option.value), children: option.label }, String(option.value))
-                ),
             });
         }
-        if (field.field === 'textarea' || field.field === 'list') {
-            return jsx('textarea', {
-                ...common,
-                rows: 4,
+        if (field.field === 'textarea') {
+            return jsx(TextArea, {
+                className: 'w-full',
+                'aria-label': field.label || field.input,
+                disabled: configSaving,
+                rows: 5,
                 maxLength: field.constraints?.max_length,
-                value: field.field === 'list' ? (Array.isArray(value) ? value.join('\n') : '') : value ?? '',
-                onChange: (event) =>
-                    updateConfigValue(
-                        field,
-                        field.field === 'list' ? event.currentTarget.value.split('\n') : event.currentTarget.value
+                value: value ?? '',
+                onChange: (event) => updateConfigValue(field, event.currentTarget.value),
+            });
+        }
+        if (field.field === 'list') {
+            const items = Array.isArray(value) ? value : [];
+            const maxItems = field.constraints?.max_items;
+            return jsxs('div', {
+                className: 'space-y-2',
+                children: [
+                    ...items.map((item, index) =>
+                        jsxs(
+                            'div',
+                            {
+                                className: 'flex items-center gap-2',
+                                children: [
+                                    jsx(Input, {
+                                        'aria-label': `${field.label || field.input} item ${index + 1}`,
+                                        disabled: configSaving,
+                                        value: item,
+                                        onChange: (event) =>
+                                            updateConfigValue(
+                                                field,
+                                                items.map((current, position) =>
+                                                    position === index ? event.currentTarget.value : current
+                                                )
+                                            ),
+                                    }),
+                                    jsx(Button, {
+                                        type: 'button',
+                                        size: 'xsmall',
+                                        color: 'grey',
+                                        isSecondary: true,
+                                        'aria-label': `Move item ${index + 1} up`,
+                                        disabled: configSaving || index === 0,
+                                        onClick: () => {
+                                            const reordered = [...items];
+                                            [reordered[index - 1], reordered[index]] = [
+                                                reordered[index],
+                                                reordered[index - 1],
+                                            ];
+                                            updateConfigValue(field, reordered);
+                                        },
+                                        children: 'Up',
+                                    }),
+                                    jsx(Button, {
+                                        type: 'button',
+                                        size: 'xsmall',
+                                        color: 'grey',
+                                        isSecondary: true,
+                                        'aria-label': `Move item ${index + 1} down`,
+                                        disabled: configSaving || index === items.length - 1,
+                                        onClick: () => {
+                                            const reordered = [...items];
+                                            [reordered[index], reordered[index + 1]] = [
+                                                reordered[index + 1],
+                                                reordered[index],
+                                            ];
+                                            updateConfigValue(field, reordered);
+                                        },
+                                        children: 'Down',
+                                    }),
+                                    jsx(Button, {
+                                        type: 'button',
+                                        size: 'xsmall',
+                                        color: 'grey',
+                                        isSecondary: true,
+                                        'aria-label': `Remove item ${index + 1}`,
+                                        disabled: configSaving,
+                                        onClick: () =>
+                                            updateConfigValue(
+                                                field,
+                                                items.filter((_current, position) => position !== index)
+                                            ),
+                                        children: 'Remove',
+                                    }),
+                                ],
+                            },
+                            `${field.input}-${index}`
+                        )
                     ),
+                    jsx(Button, {
+                        type: 'button',
+                        size: 'xsmall',
+                        isSecondary: true,
+                        disabled: configSaving || (maxItems !== undefined && items.length >= maxItems),
+                        onClick: () => updateConfigValue(field, [...items, '']),
+                        children: 'Add item',
+                    }),
+                ],
             });
         }
         if (field.field === 'file') {
             return jsxs('div', {
-                className: 'mt-1 space-y-2',
+                className: 'space-y-2',
                 children: [
                     typeof field.value === 'string' &&
                         jsx('a', {
@@ -261,8 +358,7 @@ export default function VizionExtensionHub() {
                             className: 'block truncate text-xs text-primary underline',
                             children: field.value,
                         }),
-                    jsx('input', {
-                        type: 'file',
+                    jsx(FileInput, {
                         'aria-label': field.label || field.input,
                         accept: field.constraints?.accept?.join(','),
                         disabled: configSaving,
@@ -274,7 +370,8 @@ export default function VizionExtensionHub() {
                             }
                         },
                     }),
-                    field.value &&
+                    typeof field.value === 'string' &&
+                        field.value.startsWith('/extension-files/') &&
                         jsx(Button, {
                             type: 'button',
                             color: 'red',
@@ -283,36 +380,68 @@ export default function VizionExtensionHub() {
                             onClick: () => void clearConfigFile(field),
                             children: 'Remove file',
                         }),
+                    jsx('p', {
+                        className: 'text-xs text-muted-foreground',
+                        children: [
+                            field.constraints?.accept?.join(', '),
+                            field.constraints?.max_kilobytes
+                                ? `up to ${field.constraints.max_kilobytes} KB`
+                                : null,
+                        ]
+                            .filter(Boolean)
+                            .join(' · '),
+                    }),
                 ],
             });
         }
 
-        const type =
-            field.field === 'password'
-                ? 'password'
-                : field.field === 'number'
-                  ? 'number'
-                  : 'text';
-        return jsx('input', {
-            ...common,
-            type,
+        if (field.field === 'number') {
+            return jsx(NumberInput, {
+                'aria-label': field.label || field.input,
+                disabled: configSaving,
+                value: value === undefined || value === null || value === '' ? null : Number(value),
+                min: field.constraints?.min,
+                max: field.constraints?.max,
+                onValueChange: (next) => updateConfigValue(field, next ?? ''),
+            });
+        }
+        if (field.field === 'color') {
+            const color = typeof value === 'string' ? value : '';
+            const digits = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.exec(color)?.[1];
+            const pickerValue = digits
+                ? `#${digits.length <= 4 ? [...digits.slice(0, 3)].map((digit) => digit + digit).join('') : digits.slice(0, 6)}`
+                : '#000000';
+            return jsxs('div', {
+                className: 'flex items-center gap-2',
+                children: [
+                    jsx('input', {
+                        type: 'color',
+                        'aria-label': `${field.label || field.input} picker`,
+                        disabled: configSaving,
+                        value: pickerValue,
+                        onChange: (event) => updateConfigValue(field, event.currentTarget.value),
+                    }),
+                    jsx(Input, {
+                        'aria-label': field.label || field.input,
+                        disabled: configSaving,
+                        value: color,
+                        onChange: (event) => updateConfigValue(field, event.currentTarget.value),
+                    }),
+                ],
+            });
+        }
+
+        return jsx(Input, {
+            'aria-label': field.label || field.input,
+            disabled: configSaving,
+            type: field.field === 'password' ? 'password' : 'text',
             value: value ?? '',
+            maxLength: field.constraints?.max_length,
             placeholder:
                 field.field === 'password' && field.value
                     ? `Stored: ${String(field.value)} - enter a new value to replace it`
                     : undefined,
-            maxLength: field.constraints?.max_length,
-            min: field.constraints?.min,
-            max: field.constraints?.max,
-            onChange: (event) =>
-                updateConfigValue(
-                    field,
-                    field.field === 'number'
-                        ? event.currentTarget.value === ''
-                            ? null
-                            : event.currentTarget.valueAsNumber
-                        : event.currentTarget.value
-                ),
+            onChange: (event) => updateConfigValue(field, event.currentTarget.value),
         });
     };
 
@@ -324,7 +453,7 @@ export default function VizionExtensionHub() {
                 await http.post('/api/admin/extensions/vizion/install-bundled', extensionId ? { extension: extensionId } : {});
                 window.location.reload();
             } catch (cause) {
-                setError(httpErrorToHuman(cause));
+                setError(extensionErrorToHuman(cause));
                 setBusy(false);
             }
         },
@@ -338,7 +467,7 @@ export default function VizionExtensionHub() {
             await http.post('/api/admin/extensions/vizion/master', { enabled: !isMasterOn });
             window.location.reload();
         } catch (cause) {
-            setError(httpErrorToHuman(cause));
+            setError(extensionErrorToHuman(cause));
             setBusy(false);
         }
     }, [isMasterOn]);
@@ -352,13 +481,16 @@ export default function VizionExtensionHub() {
             );
             window.location.reload();
         } catch (cause) {
-            setError(httpErrorToHuman(cause));
+            setError(extensionErrorToHuman(cause));
             setBusy(false);
         }
     }, []);
 
     const remove = useCallback(async (id) => {
-        if (!window.confirm(`Remove ${id}? Its settings and installed files will be deleted.`)) {
+        const name = id.startsWith('drift-')
+            ? id.replace('drift-', '').replace(/^\w/, (letter) => letter.toUpperCase())
+            : id;
+        if (!window.confirm(`Remove ${name}? Its settings and installed files will be deleted.`)) {
             return;
         }
 
@@ -368,7 +500,7 @@ export default function VizionExtensionHub() {
             await http.delete(`/api/admin/extensions/${encodeURIComponent(id)}`);
             window.location.reload();
         } catch (cause) {
-            setError(httpErrorToHuman(cause));
+            setError(extensionErrorToHuman(cause));
             setBusy(false);
         }
     }, []);
@@ -376,6 +508,28 @@ export default function VizionExtensionHub() {
     const items = bundledIds.map(
         (id) => extensions.find((extension) => extension.id === id) ?? { id, name: id, missing: true }
     );
+    const configuringExtension = items.find((extension) => extension.id === configuring);
+    const configurationName = configuringExtension
+        ? configuringExtension.id.startsWith('drift-')
+            ? configuringExtension.id
+                  .replace('drift-', '')
+                  .replace(/^\w/, (letter) => letter.toUpperCase())
+            : configuringExtension.name || configuringExtension.id
+        : '';
+    const configSections = configSchema.some((field) => field.tab)
+        ? configSchema.reduce((sections, field) => {
+              const name = field.tab || 'General';
+              const existing = sections.find((section) => section.name === name);
+              if (existing) {
+                  existing.fields.push(field);
+              } else {
+                  sections.push({ name, fields: [field] });
+              }
+              return sections;
+          }, configSchema.some((field) => !field.tab) ? [{ name: 'General', fields: [] }] : [])
+        : [{ name: 'General', fields: configSchema }];
+    const activeConfigSection =
+        configSections.find((section) => section.name === configSection) ?? configSections[0];
 
     return jsxs('main', {
         className: 'mx-auto w-full max-w-6xl space-y-6 p-6',
@@ -511,90 +665,128 @@ export default function VizionExtensionHub() {
                                                     }),
                                           ],
                                       }),
-                                      configuring === extension.id &&
-                                          jsxs('section', {
-                                              className: 'w-full basis-full border-t border-border pt-4',
-                                              children: [
-                                                  jsx('h3', {
-                                                      className: 'mb-3 font-semibold text-foreground',
-                                                      children: `${displayName} settings`,
-                                                  }),
-                                                  configError &&
-                                                      jsx('p', {
-                                                          role: 'alert',
-                                                          className: 'mb-3 text-sm text-destructive',
-                                                          children: configError,
-                                                      }),
-                                                  configNotice &&
-                                                      jsx('p', {
-                                                          role: 'status',
-                                                          className: 'mb-3 text-sm text-muted-foreground',
-                                                          children: configNotice,
-                                                      }),
-                                                  configLoading
-                                                      ? jsx('p', {
-                                                            className: 'text-sm text-muted-foreground',
-                                                            children: 'Loading settings…',
-                                                        })
-                                                      : configSchema.length === 0
-                                                        ? jsx('p', {
-                                                              className: 'text-sm text-muted-foreground',
-                                                              children: !extension.enabled
-                                                                  ? 'Enable this extension to load its settings.'
-                                                                  : configRegistered
-                                                                    ? 'This extension has no configurable settings.'
-                                                                    : 'This extension has not registered settings.',
-                                                          })
-                                                        : jsxs('div', {
-                                                              className: 'grid gap-4 sm:grid-cols-2',
-                                                              children: [
-                                                                  ...configSchema.map((field) =>
-                                                                      jsxs(
-                                                                          'div',
-                                                                          {
-                                                                              className:
-                                                                                  'block text-sm text-foreground',
-                                                                              children: [
-                                                                                  jsx('p', {
-                                                                                      className: 'mb-1',
-                                                                                      children: field.label || field.input,
-                                                                                  }),
-                                                                                  renderConfigControl(field),
-                                                                                  field.help &&
-                                                                                      jsx('span', {
-                                                                                          className:
-                                                                                              'mt-1 block text-xs text-muted-foreground',
-                                                                                          children: field.help,
-                                                                                      }),
-                                                                              ],
-                                                                          },
-                                                                          field.input
-                                                                      )
-                                                                  ),
-                                                                  jsx('div', {
-                                                                      className: 'sm:col-span-2',
-                                                                      children: jsx(Button, {
-                                                                          type: 'button',
-                                                                          disabled: configSaving,
-                                                                          isLoading: configSaving,
-                                                                          onClick: () => void saveConfig(),
-                                                                          children: 'Save settings',
-                                                                      }),
-                                                                  }),
-                                                              ],
-                                                          }),
-                                              ],
-                                          }),
                                   ],
                               },
                               extension.id
                           );
                       }),
                   }),
+            configuring &&
+                jsxs(Dialog, {
+                    open: true,
+                    title: `${configurationName} settings`,
+                    preventExternalClose: configSaving,
+                    hideCloseIcon: configSaving,
+                    onClose: () => setConfiguring(null),
+                    children: [
+                        jsx(SpinnerOverlay, { visible: configSaving }),
+                        configError &&
+                            jsx(Alert, {
+                                type: 'danger',
+                                children: jsx('span', { children: configError }),
+                            }),
+                        configNotice &&
+                            jsx('p', {
+                                role: 'status',
+                                className: 'mb-3 text-sm text-muted-foreground',
+                                children: configNotice,
+                            }),
+                        configLoading
+                            ? jsx('div', {
+                                  className: 'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center',
+                                  children: jsx(Spinner, { size: 'large', centered: true }),
+                              })
+                            : !configRegistered || configSchema.length === 0
+                              ? jsx('div', {
+                                    className:
+                                        'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center text-center text-sm text-muted-foreground',
+                                    children: !configuringExtension?.enabled
+                                        ? 'Enable this extension to load its settings.'
+                                        : configRegistered
+                                          ? "This extension doesn't register any settings."
+                                          : 'This extension has not registered settings.',
+                                })
+                              : jsxs('div', {
+                                    className: 'flex h-[min(30rem,calc(100dvh-14rem))] flex-col',
+                                    children: [
+                                        configSections.length > 1 &&
+                                            jsx('div', {
+                                                className: 'mb-4 shrink-0 border-b border-border pb-4',
+                                                children: jsxs('label', {
+                                                    className: 'block space-y-1 text-sm font-medium',
+                                                    children: [
+                                                        'Section',
+                                                        jsx(Select, {
+                                                            value:
+                                                                activeConfigSection?.name ??
+                                                                configSections[0]?.name ??
+                                                                'General',
+                                                            options: configSections.map((section) => ({
+                                                                value: section.name,
+                                                                label: section.name,
+                                                            })),
+                                                            disabled: configSaving,
+                                                            onChange: (value) => setConfigSection(String(value)),
+                                                        }),
+                                                    ],
+                                                }),
+                                            }),
+                                        jsx('div', {
+                                            className: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1',
+                                            children: activeConfigSection?.fields.map((field) =>
+                                                field.field === 'toggle'
+                                                    ? jsx('div', {
+                                                          className: 'mb-5',
+                                                          children: renderConfigControl(field),
+                                                      }, field.input)
+                                                    : jsxs(
+                                                          'div',
+                                                          {
+                                                              className: 'mb-5 text-sm',
+                                                              children: [
+                                                                  jsx('label', {
+                                                                      className: 'mb-1 block font-medium',
+                                                                      children: field.label || field.input,
+                                                                  }),
+                                                                  renderConfigControl(field),
+                                                                  field.help &&
+                                                                      jsx('p', {
+                                                                          className: 'mt-1 text-xs text-muted-foreground',
+                                                                          children: field.help,
+                                                                      }),
+                                                              ],
+                                                          },
+                                                          field.input
+                                                      )
+                                            ),
+                                        }),
+                                    ],
+                                }),
+                        jsxs('div', {
+                            className: 'mt-6 flex flex-wrap justify-end gap-2',
+                            children: [
+                                jsx(Button, {
+                                    type: 'button',
+                                    isSecondary: true,
+                                    disabled: configSaving,
+                                    onClick: () => setConfiguring(null),
+                                    children: 'Cancel',
+                                }),
+                                jsx(Button, {
+                                    type: 'button',
+                                    disabled: configSaving || !configRegistered || configSchema.length === 0,
+                                    isLoading: configSaving,
+                                    onClick: () => void saveConfig(),
+                                    children: 'Save Settings',
+                                }),
+                            ],
+                        }),
+                    ],
+                }),
             jsx('p', {
                 className: 'text-xs text-muted-foreground',
                 children:
-                    'Bundled extension settings open inline here. Their internal identifiers stay unchanged for compatibility.',
+                    'Bundled extension settings use the panel settings dialog. Their internal identifiers stay unchanged for compatibility.',
             }),
         ],
     });

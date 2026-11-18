@@ -9,7 +9,7 @@ the admin menu. Installation or updates happen only after clicking **Install /
 update all** or an individual **Install** button; opening the page does not
 reinstall extensions that were removed. The hub also provides enable, disable,
 configure, and remove controls. **Configure** opens the selected extension's
-settings inline in the Vizion Extension hub.
+settings in the Panel settings dialog, mounted from the Vizion Extension hub.
 
 The hub's **Enable Vizion + all extensions** master action installs or updates
 the bundled packages, enables them in dependency order, and activates Vizion.
@@ -22,9 +22,11 @@ master switch.
 The bundled extensions are filtered out of the global Admin → Extensions list;
 their settings and management remain available from the Vizion Extension hub.
 The theme editor also includes server-rendered Open Graph, Twitter, favicon, and
-theme-color tags, an indexing switch, configurable social links, an optional live
-Discord widget, and announcement/CTA controls. Its dashboard-style preview is
-rendered locally at a reduced scale rather than loaded through an iframe.
+theme-color tags, an indexing switch, a dedicated Social & Logins tab with
+editable social links and an optional live Discord widget, announcement/CTA
+controls, and a Base/Card Background Color setting. The live preview renders the
+Panel's actual `layout.app` and `page.dashboard` views in a scaled,
+non-interactive wrapper instead of using an iframe.
 
 The package includes 23 native extensions from the supplied `Telegram.zip`,
 including Register 1.6.3 with Cloudflare Turnstile. The four Drift extensions

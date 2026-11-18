@@ -24,12 +24,11 @@ final class VizionThemeGate
         $route = $request->route();
         $routeName = is_object($route) && method_exists($route, 'getName') ? $route->getName() : null;
         $path = trim($request->path(), '/');
-        $segments = explode('/', $path);
         $themeActive = $this->themes->active() === 'vizion';
 
         if (
             ! $themeActive
-            && in_array('extensions', $segments, true)
+            && $this->isExtensionRequest($path, $routeName)
             && $this->isBundledRequest($path, $routeName, $this->bundledIds())
         ) {
             abort(404);
@@ -54,6 +53,33 @@ final class VizionThemeGate
             'robots',
             $indexing ? 'index,follow' : 'noindex,nofollow',
         );
+        $themeColor = (string) $settings->get('metaThemeColor', '#101114');
+        $updated = $this->replaceMeta($updated, 'name', 'theme-color', $themeColor);
+        if (! $indexing) {
+            foreach ([
+                ['name', 'description'],
+                ['property', 'og:type'],
+                ['property', 'og:site_name'],
+                ['property', 'og:url'],
+                ['property', 'og:title'],
+                ['property', 'og:description'],
+                ['property', 'og:image'],
+                ['property', 'og:image:secure_url'],
+                ['property', 'og:image:alt'],
+                ['property', 'og:image:type'],
+                ['name', 'twitter:card'],
+                ['name', 'twitter:title'],
+                ['name', 'twitter:description'],
+                ['name', 'twitter:image'],
+                ['name', 'twitter:image:alt'],
+            ] as [$attribute, $name]) {
+                $updated = $this->replaceMeta($updated, $attribute, $name, null);
+            }
+            $response->setContent($updated);
+
+            return $response;
+        }
+
         $title = trim((string) $settings->get('metaTitle'));
         if ($title === '') {
             $title = (string) config('app.name', 'Pterodactyl');
@@ -61,7 +87,6 @@ final class VizionThemeGate
         $description = trim((string) $settings->get('metaDescription'));
         $banner = $settings->get('seoBanner');
         $image = is_string($banner) && $banner !== '' ? secure_url($banner) : null;
-        $themeColor = (string) $settings->get('metaThemeColor', '#101114');
         $updated = $this->replaceTitle($updated, $title);
         $updated = $this->replaceMeta($updated, 'property', 'og:title', $title);
         $updated = $this->replaceMeta($updated, 'property', 'og:description', $description ?: null);
@@ -194,6 +219,22 @@ final class VizionThemeGate
         foreach ($segments as $index => $segment) {
             if ($segment === 'extensions' && isset($segments[$index + 1])) {
                 return in_array($segments[$index + 1], $ids, true);
+            }
+        }
+
+        return false;
+    }
+
+    private function isExtensionRequest(string $path, ?string $routeName): bool
+    {
+        if (is_string($routeName) && preg_match('/^extensions\.[a-z0-9-]+\./', $routeName) === 1) {
+            return true;
+        }
+
+        $segments = explode('/', $path);
+        foreach ($segments as $index => $segment) {
+            if ($segment === 'extensions' && isset($segments[$index + 1])) {
+                return true;
             }
         }
 
