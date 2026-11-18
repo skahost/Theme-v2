@@ -141,7 +141,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.5"
+        manifest["version"] = "1.1.6"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
@@ -224,6 +224,33 @@ def main() -> None:
             raise ValueError("Could not locate Vizion live preview iframe.")
         settings = settings.replace(old_preview, new_preview, 1)
         entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings.encode())
+
+        shell_info, shell = entries["dist/chunk.AppShell.BcbKZzqm.js"]
+        shell = shell.decode()
+        settings_import = 'import{n as r}from"./chunk.settings.sdDqqCB1.js";'
+        if shell.count(settings_import) != 1:
+            raise ValueError("Could not locate Vizion dashboard settings import.")
+        shell = shell.replace(
+            settings_import,
+            'import{n as r,t as k}from"./chunk.settings.sdDqqCB1.js";import{useEffect as w}from"react";',
+            1,
+        )
+        preview_mount = (
+            "p=new URLSearchParams(window.location.search).get(`vizionPreview`)===`1`;return c(`div`"
+        )
+        preview_listener = (
+            "p=new URLSearchParams(window.location.search).get(`vizionPreview`)===`1`;"
+            "w(()=>{if(!p)return;let e=e=>{e.origin===window.location.origin&&"
+            "e.source===window.parent&&e.data?.type===`vizion:preview-settings`&&"
+            "e.data.settings&&typeof e.data.settings===`object`&&k(e.data.settings)};"
+            "return window.addEventListener(`message`,e),window.parent.postMessage("
+            "{type:`vizion:preview-ready`},window.location.origin),"
+            "()=>window.removeEventListener(`message`,e)},[p]);return c(`div`"
+        )
+        if shell.count(preview_mount) != 1:
+            raise ValueError("Could not locate Vizion dashboard preview mount point.")
+        shell = shell.replace(preview_mount, preview_listener, 1)
+        entries["dist/chunk.AppShell.BcbKZzqm.js"] = (shell_info, shell.encode())
 
         with zipfile.ZipFile(theme_path, "w", zipfile.ZIP_DEFLATED) as target:
             for item, contents in entries.values():
