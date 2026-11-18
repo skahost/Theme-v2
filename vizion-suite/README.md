@@ -5,15 +5,19 @@ single-upload package is [`vizionas.pteroext`](../vizionas.pteroext), which
 contains the Vizion theme and its native extension manager.
 
 After installing and enabling `vizionas.pteroext`, open **Vizion Extension** in
-the admin menu. Its first load installs or updates the bundled extensions.
-They remain disabled until enabled individually. **Configure** opens
-Pterodactyl's native Extensions manager for each extension's settings.
+the admin menu. Installation or updates happen only after clicking **Install /
+update all** or an individual **Install** button; opening the page does not
+reinstall extensions that were removed. The hub also provides enable, disable,
+configure, and remove controls. **Configure** opens Pterodactyl's native
+Extensions manager.
 
 The package includes 23 native extensions from the supplied `Telegram.zip`,
-including Drift Register 1.6.2 with Cloudflare Turnstile. Their routes,
-permissions, migrations, and settings remain separate native extension
-packages. Two colliding Tailwind prefixes were made unique so those packages
-can be enabled together.
+including Register 1.6.3 with Cloudflare Turnstile. The four Drift extensions
+are displayed as Register, Mod, Plugins, and Properties; their internal
+identifiers remain unchanged so existing routes and settings continue working.
+Their routes, permissions, migrations, and settings remain separate native
+extension packages. Two colliding Tailwind prefixes were made unique so those
+packages can be enabled together.
 
 The Branding extension is not redistributed because its package license
 prohibits redistribution.

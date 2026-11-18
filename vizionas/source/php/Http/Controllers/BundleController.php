@@ -5,22 +5,38 @@ declare(strict_types=1);
 namespace Vizion\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Pterodactyl\Contracts\Extensions\InstallsExtensions;
 use Pterodactyl\Services\Extensions\ExtensionManifest;
 use Pterodactyl\Services\Extensions\ExtensionRepository;
 
 final class BundleController
 {
-    public function install(InstallsExtensions $installer, ExtensionRepository $extensions): JsonResponse
-    {
+    public function install(
+        Request $request,
+        InstallsExtensions $installer,
+        ExtensionRepository $extensions,
+    ): JsonResponse {
         $manifest = $extensions->discovered()->get('vizion');
         abort_unless($manifest instanceof ExtensionManifest, 404, 'The Vizion extension is not installed.');
+
+        $validated = $request->validate([
+            'extension' => ['sometimes', 'string', 'regex:/^[a-z0-9-]+$/'],
+        ]);
+        $requestedId = $validated['extension'] ?? null;
 
         $indexPath = $manifest->path('resources', 'packages', 'index.json');
         abort_unless(is_file($indexPath), 500, 'The Vizion package index is missing.');
 
         $packages = json_decode((string) file_get_contents($indexPath), true, 512, JSON_THROW_ON_ERROR);
         abort_unless(is_array($packages), 500, 'The Vizion package index is invalid.');
+        if ($requestedId !== null) {
+            abort_unless(
+                in_array($requestedId, array_column($packages, 'id'), true),
+                404,
+                sprintf('The bundled extension "%s" was not found.', $requestedId),
+            );
+        }
 
         $results = [];
         foreach ($packages as $package) {
@@ -35,6 +51,10 @@ final class BundleController
             );
 
             $id = $package['id'];
+            if ($requestedId !== null && $id !== $requestedId) {
+                continue;
+            }
+
             $version = $package['version'];
             $path = $manifest->path('resources', 'packages', $package['file']);
             abort_unless(is_file($path), 500, sprintf('The bundled package "%s" is missing.', $id));

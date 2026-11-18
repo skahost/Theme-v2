@@ -11,7 +11,20 @@ BUNDLE = ROOT / "vizion-suite-bundle.zip"
 OUTPUT = ROOT / "vizionas.pteroext"
 SOURCE = ROOT / "vizionas" / "source"
 PREFIX_RENAMES = {"demo": ("dm", "dmo"), "mcp": ("mcp", "mcpai")}
-PACKAGE_VERSIONS = {"demo": "1.0.1", "mcp": "1.1.1"}
+PACKAGE_VERSIONS = {
+    "demo": "1.0.1",
+    "drift-register": "1.6.3",
+    "drift-mod": "1.1.1",
+    "drift-plugins": "1.5.1",
+    "drift-properties": "1.0.1",
+    "mcp": "1.1.1",
+}
+PACKAGE_NAMES = {
+    "drift-register": "Register",
+    "drift-mod": "Mod",
+    "drift-plugins": "Plugins",
+    "drift-properties": "Properties",
+}
 
 
 def rewrite_extension(
@@ -19,6 +32,7 @@ def rewrite_extension(
     old_prefix: str | None,
     new_prefix: str | None,
     version: str | None = None,
+    name: str | None = None,
 ) -> bytes:
     source = zipfile.ZipFile(io.BytesIO(package))
     result = io.BytesIO()
@@ -32,6 +46,8 @@ def rewrite_extension(
                     manifest["ui"]["prefix"] = new_prefix
                 if version is not None:
                     manifest["version"] = version
+                if name is not None:
+                    manifest["name"] = name
                 contents = json.dumps(manifest, indent=4, ensure_ascii=False).encode() + b"\n"
             elif old_prefix is not None and item.filename.startswith(("dist/", "src/")):
                 contents = contents.replace(f"{old_prefix}:".encode(), f"{new_prefix}:".encode())
@@ -74,10 +90,11 @@ def main() -> None:
                 package,
                 *(old_new or (None, None)),
                 version=PACKAGE_VERSIONS.get(identifier),
+                name=PACKAGE_NAMES.get(identifier),
             )
-            if old_new is not None:
-                with zipfile.ZipFile(io.BytesIO(package)) as rewritten:
-                    manifest = json.loads(rewritten.read("extension.json"))
+            with zipfile.ZipFile(io.BytesIO(package)) as rewritten:
+                manifest = json.loads(rewritten.read("extension.json"))
+                if old_new is not None:
                     for asset in rewritten.namelist():
                         if not asset.startswith("dist/"):
                             continue
@@ -124,7 +141,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.2"
+        manifest["version"] = "1.1.4"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",

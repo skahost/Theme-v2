@@ -28,10 +28,16 @@ const bundledIds = [
     'votifier-tester',
 ];
 
+const adminExtensionsUrl = () => {
+    const basePath = window.location.pathname.replace(/\/panel(?:\/.*)?$/, '');
+
+    return `${basePath}/panel/extensions`;
+};
+
 export default function VizionExtensionHub() {
     const [extensions, setExtensions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [installing, setInstalling] = useState(false);
+    const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
     const refresh = useCallback(async () => {
@@ -39,48 +45,76 @@ export default function VizionExtensionHub() {
         setExtensions((response.data?.data ?? []).filter((extension) => bundledIds.includes(extension.id)));
     }, []);
 
-    const installBundle = useCallback(async () => {
-        setInstalling(true);
-        setError(null);
-        let failure = null;
+    useEffect(() => {
+        let mounted = true;
+        http.get('/api/admin/extensions')
+            .then((response) => {
+                if (mounted) {
+                    setExtensions(
+                        (response.data?.data ?? []).filter((extension) => bundledIds.includes(extension.id))
+                    );
+                }
+            })
+            .catch((cause) => {
+                if (mounted) {
+                    setError(httpErrorToHuman(cause));
+                }
+            })
+            .finally(() => {
+                if (mounted) {
+                    setLoading(false);
+                }
+            });
 
-        try {
-            await http.post('/api/admin/extensions/vizion/install-bundled');
-        } catch (cause) {
-            failure = httpErrorToHuman(cause);
-        }
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
-        try {
-            await refresh();
-        } catch (cause) {
-            failure = failure
-                ? `${failure}\n${httpErrorToHuman(cause)}`
-                : httpErrorToHuman(cause);
-        } finally {
-            setLoading(false);
-            setInstalling(false);
-        }
-
-        if (failure) {
-            setError(failure);
-        }
-    }, [refresh]);
+    const install = useCallback(
+        async (extensionId) => {
+            setBusy(true);
+            setError(null);
+            try {
+                await http.post('/api/admin/extensions/vizion/install-bundled', extensionId ? { extension: extensionId } : {});
+                window.location.reload();
+            } catch (cause) {
+                setError(httpErrorToHuman(cause));
+                setBusy(false);
+            }
+        },
+        []
+    );
 
     const toggle = useCallback(async (id, enabled) => {
+        setBusy(true);
+        setError(null);
         try {
-            setError(null);
             await http.post(
                 `/api/admin/extensions/${encodeURIComponent(id)}/${enabled ? 'disable' : 'enable'}`
             );
             window.location.reload();
         } catch (cause) {
             setError(httpErrorToHuman(cause));
+            setBusy(false);
         }
     }, []);
 
-    useEffect(() => {
-        void installBundle();
-    }, [installBundle]);
+    const remove = useCallback(async (id) => {
+        if (!window.confirm(`Remove ${id}? Its settings and installed files will be deleted.`)) {
+            return;
+        }
+
+        setBusy(true);
+        setError(null);
+        try {
+            await http.delete(`/api/admin/extensions/${encodeURIComponent(id)}`);
+            window.location.reload();
+        } catch (cause) {
+            setError(httpErrorToHuman(cause));
+            setBusy(false);
+        }
+    }, []);
 
     const items = bundledIds.map(
         (id) => extensions.find((extension) => extension.id === id) ?? { id, name: id, missing: true }
@@ -101,16 +135,16 @@ export default function VizionExtensionHub() {
                             jsx('p', {
                                 className: 'mt-2 max-w-3xl text-sm text-muted-foreground',
                                 children:
-                                    'Install and manage the bundled native extensions. Packages stay disabled until you enable them.',
+                                    'Install, enable, configure, or remove bundled extensions. Removing an extension will not reinstall it automatically.',
                             }),
                         ],
                     }),
                     jsx(Button, {
                         type: 'button',
-                        disabled: installing,
-                        isLoading: installing,
-                        onClick: () => void installBundle(),
-                        children: installing ? 'Installing…' : 'Install / repair packages',
+                        disabled: busy || loading,
+                        isLoading: busy,
+                        onClick: () => void install(),
+                        children: busy ? 'Working…' : 'Install / update all',
                     }),
                 ],
             }),
@@ -163,25 +197,44 @@ export default function VizionExtensionHub() {
                                       jsxs('div', {
                                           className: 'flex shrink-0 flex-wrap gap-2',
                                           children: [
-                                              jsx(Button, {
-                                                  type: 'button',
-                                                  isSecondary: true,
-                                                  disabled:
-                                                      extension.missing ||
-                                                      extension.state === 'invalid' ||
-                                                      installing,
-                                                  onClick: () => void toggle(extension.id, enabled),
-                                                  children: enabled ? 'Disable' : 'Enable',
-                                              }),
-                                              jsx(Button, {
-                                                  type: 'button',
-                                                  isSecondary: true,
-                                                  disabled: extension.missing,
-                                                  onClick: () => {
-                                                      window.location.href = '/admin/extensions';
-                                                  },
-                                                  children: 'Configure',
-                                              }),
+                                              extension.missing
+                                                  ? jsx(Button, {
+                                                        type: 'button',
+                                                        isSecondary: true,
+                                                        disabled: busy,
+                                                        onClick: () => void install(extension.id),
+                                                        children: 'Install',
+                                                    })
+                                                  : jsxs('div', {
+                                                        className: 'flex flex-wrap gap-2',
+                                                        children: [
+                                                            jsx(Button, {
+                                                                type: 'button',
+                                                                isSecondary: true,
+                                                                disabled:
+                                                                    busy || extension.state === 'invalid',
+                                                                onClick: () =>
+                                                                    void toggle(extension.id, enabled),
+                                                                children: enabled ? 'Disable' : 'Enable',
+                                                            }),
+                                                            jsx(Button, {
+                                                                type: 'button',
+                                                                isSecondary: true,
+                                                                disabled: busy,
+                                                                onClick: () =>
+                                                                    window.location.assign(adminExtensionsUrl()),
+                                                                children: 'Configure',
+                                                            }),
+                                                            jsx(Button, {
+                                                                type: 'button',
+                                                                color: 'red',
+                                                                isSecondary: true,
+                                                                disabled: busy,
+                                                                onClick: () => void remove(extension.id),
+                                                                children: 'Remove',
+                                                            }),
+                                                        ],
+                                                    }),
                                           ],
                                       }),
                                   ],
@@ -193,7 +246,7 @@ export default function VizionExtensionHub() {
             jsx('p', {
                 className: 'text-xs text-muted-foreground',
                 children:
-                    "Configure opens Pterodactyl's native Extensions manager, which provides each extension's settings and file controls.",
+                    "Configure opens Pterodactyl's native Extensions manager, which provides each extension's settings. Extension identifiers remain unchanged for compatibility.",
             }),
         ],
     });
