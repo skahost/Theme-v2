@@ -19,3 +19,8 @@ The Branding extension is not redistributed because its package license
 prohibits redistribution.
 
 Rebuild the single-upload package with `python3 scripts/build_vizionas.py`.
+
+The Panel's Laravel file cache also requires `storage/framework/cache/data` to
+exist and be writable by the PHP/web-server user. A `file_put_contents` error
+under that directory is a Panel filesystem-permissions/setup issue, not a
+missing file in this extension package.

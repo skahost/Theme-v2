@@ -11,9 +11,15 @@ BUNDLE = ROOT / "vizion-suite-bundle.zip"
 OUTPUT = ROOT / "vizionas.pteroext"
 SOURCE = ROOT / "vizionas" / "source"
 PREFIX_RENAMES = {"demo": ("dm", "dmo"), "mcp": ("mcp", "mcpai")}
+PACKAGE_VERSIONS = {"demo": "1.0.1", "mcp": "1.1.1"}
 
 
-def rewrite_extension(package: bytes, old_prefix: str | None, new_prefix: str | None) -> bytes:
+def rewrite_extension(
+    package: bytes,
+    old_prefix: str | None,
+    new_prefix: str | None,
+    version: str | None = None,
+) -> bytes:
     source = zipfile.ZipFile(io.BytesIO(package))
     result = io.BytesIO()
 
@@ -24,11 +30,19 @@ def rewrite_extension(package: bytes, old_prefix: str | None, new_prefix: str | 
                 manifest = json.loads(contents)
                 if old_prefix is not None:
                     manifest["ui"]["prefix"] = new_prefix
+                if version is not None:
+                    manifest["version"] = version
                 contents = json.dumps(manifest, indent=4, ensure_ascii=False).encode() + b"\n"
-            elif old_prefix is not None and item.filename.startswith("dist/"):
+            elif old_prefix is not None and item.filename.startswith(("dist/", "src/")):
                 contents = contents.replace(f"{old_prefix}:".encode(), f"{new_prefix}:".encode())
                 contents = contents.replace(
-                    f".{old_prefix}\\\\:".encode(), f".{new_prefix}\\\\:".encode()
+                    f".{old_prefix}\\:".encode(), f".{new_prefix}\\:".encode()
+                )
+                contents = contents.replace(
+                    f"--{old_prefix}-".encode(), f"--{new_prefix}-".encode()
+                )
+                contents = contents.replace(
+                    f"prefix({old_prefix})".encode(), f"prefix({new_prefix})".encode()
                 )
             target.writestr(item, contents)
 
@@ -56,7 +70,27 @@ def main() -> None:
             old_new = PREFIX_RENAMES.get(identifier)
             if old_new is not None and manifest["ui"].get("prefix") != old_new[0]:
                 raise ValueError(f"Unexpected Tailwind prefix for {identifier}")
-            package = rewrite_extension(package, *(old_new or (None, None)))
+            package = rewrite_extension(
+                package,
+                *(old_new or (None, None)),
+                version=PACKAGE_VERSIONS.get(identifier),
+            )
+            if old_new is not None:
+                with zipfile.ZipFile(io.BytesIO(package)) as rewritten:
+                    manifest = json.loads(rewritten.read("extension.json"))
+                    for asset in rewritten.namelist():
+                        if not asset.startswith("dist/"):
+                            continue
+                        contents = rewritten.read(asset)
+                        if (
+                            f".{old_new[0]}\\:".encode() in contents
+                            or f"--{old_new[0]}-".encode() in contents
+                            or f"prefix({old_new[0]})".encode() in contents
+                            or f"{old_new[0]}:".encode() in contents
+                        ):
+                            raise ValueError(
+                                f"Unprefixed Tailwind utility or theme variable remains in {identifier}/{asset}"
+                            )
             packages.append(
                 {
                     "id": identifier,
@@ -90,7 +124,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.1"
+        manifest["version"] = "1.1.2"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
