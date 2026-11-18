@@ -90,7 +90,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.0"
+        manifest["version"] = "1.1.1"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
@@ -130,6 +130,49 @@ def main() -> None:
             1,
         )
         entries["dist/client.js"] = (client_info, client)
+
+        settings_info, settings = entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"]
+        settings = settings.decode()
+        return_admin = (
+            "})]}),u(`section`,{className:`min-w-0 space-y-6 p-4 sm:p-6 "
+            "xl:max-h-dvh xl:overflow-y-auto xl:border-r xl:border-border`"
+        )
+        extension_link = (
+            ",u(`a`,{href:`${window.location.pathname.split(`/panel/`)[0]}/panel/vizion-extensions`,"
+            "title:`Vizion Extension`,className:`flex shrink-0 flex-col items-center justify-center "
+            "gap-1 rounded-xl px-2 py-2 text-center text-xs leading-tight text-muted-foreground "
+            "transition hover:bg-popover hover:text-foreground`,children:`Vizion Extension`})"
+        )
+        if settings.count(return_admin) != 1:
+            raise ValueError("Could not locate Vizion settings sidebar.")
+        link_position = settings.index(return_admin) + 2
+        settings = settings[:link_position] + extension_link + settings[link_position:]
+
+        old_preview = (
+            "className:`flex min-h-[65dvh] flex-1 justify-center overflow-hidden rounded-2xl "
+            "border border-border/70 bg-background/40 p-3 sm:p-6 xl:min-h-0`,children:l(`div`,"
+            "{className:`h-full min-h-[58dvh] w-full overflow-hidden rounded-xl border "
+            "border-border/70 shadow-2xl transition-[max-width] duration-300 xl:min-h-0 "
+            "${b===`mobile`?`max-w-[420px]`:`max-w-none`}`,children:l(`iframe`,{ref:J,"
+            "title:`Live Vizion dashboard preview`,src:`/?vizionPreview=1`,onLoad:Z,"
+            "className:`block h-full w-full border-0 bg-background`})})"
+        )
+        new_preview = (
+            "className:`flex min-h-[65dvh] flex-1 justify-center overflow-hidden rounded-2xl "
+            "border border-border/70 bg-background/40 p-3 sm:p-6 xl:min-h-0`,"
+            "style:{height:`72dvh`,minHeight:`560px`},children:l(`div`,"
+            "{className:`h-full min-h-[58dvh] w-full overflow-hidden rounded-xl border "
+            "border-border/70 shadow-2xl transition-[max-width] duration-300 xl:min-h-0 "
+            "${b===`mobile`?`max-w-[420px]`:`max-w-none`}`,children:l(`iframe`,{ref:J,"
+            "title:`Live Vizion dashboard preview`,"
+            "src:`${window.location.pathname.split(`/panel/`)[0]}/?vizionPreview=1`,onLoad:Z,"
+            "className:`block h-full w-full border-0 bg-background`,style:{"
+            "transform:`scale(.75)`,transformOrigin:`top left`,width:`133.333%`,height:`133.333%`}})})"
+        )
+        if settings.count(old_preview) != 1:
+            raise ValueError("Could not locate Vizion live preview iframe.")
+        settings = settings.replace(old_preview, new_preview, 1)
+        entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings.encode())
 
         with zipfile.ZipFile(theme_path, "w", zipfile.ZIP_DEFLATED) as target:
             for item, contents in entries.values():
