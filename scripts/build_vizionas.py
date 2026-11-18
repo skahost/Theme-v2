@@ -48,6 +48,11 @@ def rewrite_extension(
                     manifest["version"] = version
                 if name is not None:
                     manifest["name"] = name
+                for screen in manifest.get("ui", {}).get("screens", []):
+                    nav = screen.get("nav")
+                    label = nav.get("label") if isinstance(nav, dict) else None
+                    if isinstance(label, str) and label.lower().startswith("drift "):
+                        nav["label"] = label[6:]
                 contents = json.dumps(manifest, indent=4, ensure_ascii=False).encode() + b"\n"
             elif old_prefix is not None and item.filename.startswith(("dist/", "src/")):
                 contents = contents.replace(f"{old_prefix}:".encode(), f"{new_prefix}:".encode())
@@ -141,7 +146,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.6"
+        manifest["version"] = "1.1.7"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
@@ -161,7 +166,10 @@ def main() -> None:
             raise ValueError("Could not locate Vizion provider boot method.")
         provider = provider.decode().replace(
             boot,
-            "$this->registerApiRoutes();\n        " + boot,
+            "$this->registerApiRoutes();\n        "
+            "$this->app['router']->pushMiddlewareToGroup('admin-api', "
+            "\\Vizion\\Http\\Middleware\\FilterBundledExtensionsFromAdminList::class);\n        "
+            + boot,
             1,
         ).encode()
         entries["php/Provider.php"] = (provider_info, provider)
