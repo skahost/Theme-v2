@@ -36,23 +36,23 @@ const adminExtensionsUrl = () => {
 
 export default function VizionExtensionHub() {
     const [extensions, setExtensions] = useState([]);
+    const [master, setMaster] = useState(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
 
-    const refresh = useCallback(async () => {
-        const response = await http.get('/api/admin/extensions');
-        setExtensions((response.data?.data ?? []).filter((extension) => bundledIds.includes(extension.id)));
-    }, []);
-
     useEffect(() => {
         let mounted = true;
-        http.get('/api/admin/extensions')
-            .then((response) => {
+        Promise.all([
+            http.get('/api/admin/extensions'),
+            http.get('/api/admin/extensions/vizion/master'),
+        ])
+            .then(([response, masterResponse]) => {
                 if (mounted) {
                     setExtensions(
                         (response.data?.data ?? []).filter((extension) => bundledIds.includes(extension.id))
                     );
+                    setMaster(masterResponse.data?.data ?? null);
                 }
             })
             .catch((cause) => {
@@ -71,6 +71,10 @@ export default function VizionExtensionHub() {
         };
     }, []);
 
+    const isMasterOn =
+        master?.active === true ||
+        extensions.some((extension) => bundledIds.includes(extension.id) && extension.enabled === true);
+
     const install = useCallback(
         async (extensionId) => {
             setBusy(true);
@@ -85,6 +89,18 @@ export default function VizionExtensionHub() {
         },
         []
     );
+
+    const toggleMaster = useCallback(async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            await http.post('/api/admin/extensions/vizion/master', { enabled: !isMasterOn });
+            window.location.reload();
+        } catch (cause) {
+            setError(httpErrorToHuman(cause));
+            setBusy(false);
+        }
+    }, [isMasterOn]);
 
     const toggle = useCallback(async (id, enabled) => {
         setBusy(true);
@@ -138,6 +154,14 @@ export default function VizionExtensionHub() {
                                     'Install, enable, configure, or remove bundled extensions. Removing an extension will not reinstall it automatically.',
                             }),
                         ],
+                    }),
+                    jsx(Button, {
+                        type: 'button',
+                        disabled: busy || loading || master === null,
+                        isSecondary: true,
+                        isLoading: busy,
+                        onClick: () => void toggleMaster(),
+                        children: isMasterOn ? 'Turn Vizion + extensions off' : 'Enable Vizion + all extensions',
                     }),
                     jsx(Button, {
                         type: 'button',

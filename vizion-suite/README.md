@@ -11,6 +11,15 @@ reinstall extensions that were removed. The hub also provides enable, disable,
 configure, and remove controls. **Configure** opens Pterodactyl's native
 Extensions manager.
 
+The hub's **Enable Vizion + all extensions** master action installs or updates
+the bundled packages, enables them in dependency order, and activates Vizion.
+**Turn Vizion + extensions off** switches to Classic first, then disables the
+bundled extensions. Vizion's extension stays enabled while the master switch is
+off so the hub remains available to turn it back on. These coordinated actions
+are available from the Vizion Extension hub; changing the active theme directly
+in Pterodactyl's native Themes manager does not trigger the bundled extensions'
+master switch.
+
 The package includes 23 native extensions from the supplied `Telegram.zip`,
 including Register 1.6.3 with Cloudflare Turnstile. The four Drift extensions
 are displayed as Register, Mod, Plugins, and Properties; their internal

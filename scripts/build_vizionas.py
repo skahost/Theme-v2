@@ -141,7 +141,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.4"
+        manifest["version"] = "1.1.5"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
