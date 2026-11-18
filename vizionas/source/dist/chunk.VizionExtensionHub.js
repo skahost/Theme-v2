@@ -187,6 +187,9 @@ export default function VizionExtensionHub() {
                       className: 'grid gap-3',
                       children: items.map((extension) => {
                           const enabled = extension.enabled === true;
+                          const displayName = extension.id.startsWith('drift-')
+                              ? extension.id.replace('drift-', '').replace(/^\w/, (letter) => letter.toUpperCase())
+                              : extension.name || extension.id;
                           const status = extension.missing
                               ? 'Not installed'
                               : extension.state === 'error' || extension.state === 'invalid'
@@ -206,7 +209,7 @@ export default function VizionExtensionHub() {
                                           children: [
                                               jsx('h2', {
                                                   className: 'font-semibold text-foreground',
-                                                  children: extension.name || extension.id,
+                                                  children: displayName,
                                               }),
                                               jsx('p', {
                                                   className: 'mt-1 text-sm text-muted-foreground',
