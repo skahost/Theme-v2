@@ -171,14 +171,7 @@ def patch_vizion_provider(provider: bytes) -> bytes:
         "            ['tag' => 'meta', 'name' => 'twitter:title', 'content' => $title],\n"
         "        ];\n\n"
         "        if ($settings->get('allowIndexing', false) !== true) {\n"
-        "            $tags = [\n"
-        "                ['tag' => 'meta', 'name' => 'robots', 'content' => 'noindex, nofollow'],\n"
-        "                ['tag' => 'meta', 'name' => 'theme-color', 'content' => $themeColor],\n"
-        "            ];\n"
-        "            if (is_string($favicon)) {\n"
-        "                $tags[] = ['tag' => 'link', 'rel' => 'icon', 'href' => secure_url($favicon)];\n"
-        "            }\n\n"
-        "            return $tags;\n"
+        "            return [];\n"
         "        }\n\n"
         "        if ($description !== '') {"
     )
@@ -705,30 +698,9 @@ def main() -> None:
             entries[stylesheet_path] = (stylesheet_info, patch_theme_stylesheet(stylesheet))
 
         settings_info, settings = entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"]
-        settings = patch_settings_page(settings).decode()
-        return_admin = (
-            "})]}),u(`section`,{className:`min-w-0 space-y-6 p-4 sm:p-6 "
-            "xl:max-h-dvh xl:overflow-y-auto xl:border-r xl:border-border`"
-        )
-        extension_link = (
-            ",u(`a`,{href:`${window.location.pathname.split(`/panel/`)[0]}/panel/vizion-extensions`,"
-            "title:`Vizion Extension`,className:`flex shrink-0 flex-col items-center justify-center "
-            "gap-1 rounded-xl px-2 py-2 text-center text-xs leading-tight text-muted-foreground "
-            "transition hover:bg-popover hover:text-foreground`,children:`Vizion Extension`}),"
-            "u(`button`,{type:`button`,onClick:async()=>{if(!window.confirm(`Are you sure you want to reset all theme settings?`))return;"
-            "let r=await fetch(`/api/admin/extensions/vizion/reset`,{method:`POST`,headers:{"
-            "`X-Requested-With`: `XMLHttpRequest`,`X-CSRF-TOKEN`:document.querySelector(`meta[name=csrf-token]`)?.getAttribute(`content`)||``,"
-            "`Accept`: `application/json`,`Content-Type`: `application/json`},body:`{}`});"
-            "if(!r.ok)throw Error(`Reset failed (${r.status}).`);window.location.reload()},"
-            "className:`mt-auto flex shrink-0 flex-col items-center justify-center rounded-xl px-2 py-2 "
-            "text-center text-xs leading-tight text-red-400 transition hover:bg-red-500/10`,children:`Reset to Defaults`})"
-        )
-        if settings.count(return_admin) != 1:
-            raise ValueError("Could not locate Vizion settings sidebar.")
-        link_position = settings.index(return_admin) + 2
-        settings = settings[:link_position] + extension_link + settings[link_position:]
-
-        entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings.encode())
+        if b"noindex" in settings:
+            raise ValueError("Vizion settings chunk unexpectedly contains SEO robots text.")
+        entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings)
 
         shell_info, shell = entries["dist/chunk.AppShell.BcbKZzqm.js"]
         shell = shell.decode()

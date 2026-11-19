@@ -48,12 +48,7 @@ final class VizionThemeGate
 
         $settings = $this->extensions->settings('vizion');
         $indexing = $settings->get('allowIndexing', false) === true;
-        $updated = $this->replaceMeta(
-            $body,
-            'name',
-            'robots',
-            $indexing ? 'index,follow' : 'noindex,nofollow',
-        );
+        $updated = $body;
         $themeColor = (string) $settings->get('metaThemeColor', '#101114');
         $updated = $this->replaceMeta($updated, 'name', 'theme-color', $themeColor);
         if (! $indexing) {

@@ -9,12 +9,38 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Pterodactyl\Services\Extensions\ExtensionManifest;
 use Pterodactyl\Services\Extensions\ExtensionRepository;
+use Pterodactyl\Contracts\Extensions\SetsExtensionEnabled;
+use Pterodactyl\Services\Themes\ThemeRepository;
 use Symfony\Component\HttpFoundation\Response;
 use UnexpectedValueException;
 
 final class FilterBundledExtensionsFromAdminList
 {
-    public function __construct(private readonly ExtensionRepository $extensions) {}
+    public function __construct(
+        private readonly ExtensionRepository $extensions,
+        private readonly SetsExtensionEnabled $state,
+        private readonly ThemeRepository $themes,
+    ) {}
+
+    private function disableBundledDuplicates(): void
+    {
+        foreach ([
+            'demo', 'drift-register', 'drift-mod', 'drift-plugins', 'drift-properties',
+            'egg-changer', 'mc-console', 'mc-players', 'mc-version', 'mc-world',
+            'mcp', 'monitoring', 'node-resources', 'palworld-tools', 'server-creator',
+            'server-expiry', 'server-groups', 'server-splitter', 'sso', 'subdomains',
+            'terraria-tools', 'valheim-tools', 'votifier-tester',
+        ] as $id) {
+            $manifest = $this->extensions->discovered()->get($id);
+            if (! $manifest instanceof ExtensionManifest) {
+                continue;
+            }
+            if (! ($this->extensions->records()->get($id)->enabled ?? false)) {
+                continue;
+            }
+            $this->state->setEnabled($id, false, $manifest);
+        }
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -23,6 +49,11 @@ final class FilterBundledExtensionsFromAdminList
                 @mkdir($directory, 0775, true);
             }
         }
+
+        if ($this->themes->active() !== 'vizion') {
+            $this->disableBundledDuplicates();
+        }
+
         $response = $next($request);
         if (
             ! $request->isMethod('GET')
