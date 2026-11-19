@@ -88,8 +88,9 @@ def patch_vizion_provider(provider: bytes) -> bytes:
         "    {\n"
     )
     reset_route_methods = (
-        "    private function registerApiRoutes(): void\n"
+        "    protected function registerApiRoutes(?string $directory = null): void\n"
         "    {\n"
+        "        parent::registerApiRoutes($directory);\n"
         "        $this->app['router']->post('/api/admin/extensions/vizion/reset', "
         "[\\Vizion\\Http\\Controllers\\BundleController::class, 'reset']);\n"
         "    }\n\n"
