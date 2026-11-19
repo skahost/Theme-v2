@@ -21,6 +21,7 @@ final class VizionThemeGate
 
     public function handle(Request $request, Closure $next): Response
     {
+        $this->ensureCacheDirectories();
         $route = $request->route();
         $routeName = is_object($route) && method_exists($route, 'getName') ? $route->getName() : null;
         $path = trim($request->path(), '/');
@@ -100,6 +101,20 @@ final class VizionThemeGate
         $response->setContent($updated);
 
         return $response;
+    }
+
+    private function ensureCacheDirectories(): void
+    {
+        foreach ([
+            storage_path('framework/cache'),
+            storage_path('framework/cache/data'),
+            storage_path('framework/views'),
+            storage_path('framework/sessions'),
+        ] as $directory) {
+            if (! is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+        }
     }
 
     private function replaceMeta(string $html, string $attribute, string $name, ?string $content): string

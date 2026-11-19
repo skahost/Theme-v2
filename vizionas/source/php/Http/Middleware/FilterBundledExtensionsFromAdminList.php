@@ -18,6 +18,11 @@ final class FilterBundledExtensionsFromAdminList
 
     public function handle(Request $request, Closure $next): Response
     {
+        foreach ([storage_path('framework/cache'), storage_path('framework/cache/data')] as $directory) {
+            if (! is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+        }
         $response = $next($request);
         if (
             ! $request->isMethod('GET')
@@ -33,36 +38,24 @@ final class FilterBundledExtensionsFromAdminList
             return $response;
         }
 
-        $manifest = $this->extensions->discovered()->get('vizion');
-        if (! $manifest instanceof ExtensionManifest) {
-            throw new UnexpectedValueException('The Vizion extension manifest is unavailable.');
-        }
-
-        $indexPath = $manifest->path('resources', 'packages', 'index.json');
-        if (! is_file($indexPath)) {
-            throw new UnexpectedValueException('The Vizion bundle index is missing.');
-        }
-        $contents = file_get_contents($indexPath);
-        if (! is_string($contents)) {
-            throw new UnexpectedValueException('The Vizion bundle index could not be read.');
-        }
-        $packages = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
-        if (! is_array($packages)) {
-            throw new UnexpectedValueException('The Vizion bundle index is invalid.');
-        }
-
-        $ids = [];
-        foreach ($packages as $package) {
-            if (! is_array($package) || ! is_string($package['id'] ?? null)) {
-                throw new UnexpectedValueException('The Vizion bundle index contains an invalid entry.');
-            }
-            $ids[] = $package['id'];
-        }
+        $ids = [
+            'demo', 'drift-register', 'drift-mod', 'drift-plugins', 'drift-properties',
+            'egg-changer', 'mc-console', 'mc-players', 'mc-version', 'mc-world',
+            'mcp', 'monitoring', 'node-resources', 'palworld-tools', 'server-creator',
+            'server-expiry', 'server-groups', 'server-splitter', 'sso', 'subdomains',
+            'terraria-tools', 'valheim-tools', 'votifier-tester',
+        ];
 
         $payload['data'] = array_values(array_filter(
             $payload['data'],
-            static fn (mixed $extension): bool => ! is_array($extension)
-                || ! in_array($extension['id'] ?? null, $ids, true),
+            static function (mixed $extension) use ($ids): bool {
+                if (! is_array($extension)) {
+                    return true;
+                }
+                $id = (string) ($extension['id'] ?? '');
+                return ! in_array($id, $ids, true)
+                    && ! str_starts_with(strtolower($id), 'drift-');
+            },
         ));
         $response->setData($payload);
 

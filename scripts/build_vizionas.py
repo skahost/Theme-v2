@@ -83,6 +83,21 @@ def rewrite_extension(
 
 def patch_vizion_provider(provider: bytes) -> bytes:
     source = provider.decode()
+    reset_route_marker = (
+        "    private function invalidateHeadTags(mixed $value): mixed\n"
+        "    {\n"
+    )
+    reset_route_methods = (
+        "    private function registerApiRoutes(): void\n"
+        "    {\n"
+        "        $this->app['router']->post('/api/admin/extensions/vizion/reset', "
+        "[\\Vizion\\Http\\Controllers\\BundleController::class, 'reset']);\n"
+        "    }\n\n"
+    )
+    if source.count(reset_route_marker) != 1:
+        raise ValueError("Could not locate Vizion Provider reset route insertion point.")
+    source = source.replace(reset_route_marker, reset_route_methods + reset_route_marker, 1)
+
     marker = (
         "ExtensionSettingDefinition::make('metaDescription', 'metaDescription', '')"
         "\n                ->textarea(180)->normalizeUsing($this->invalidateHeadTags(...))"
@@ -155,7 +170,10 @@ def patch_vizion_provider(provider: bytes) -> bytes:
         "            ['tag' => 'meta', 'name' => 'twitter:title', 'content' => $title],\n"
         "        ];\n\n"
         "        if ($settings->get('allowIndexing', false) !== true) {\n"
-        "            $tags = [['tag' => 'meta', 'name' => 'theme-color', 'content' => $themeColor]];\n"
+        "            $tags = [\n"
+        "                ['tag' => 'meta', 'name' => 'robots', 'content' => 'noindex, nofollow'],\n"
+        "                ['tag' => 'meta', 'name' => 'theme-color', 'content' => $themeColor],\n"
+        "            ];\n"
         "            if (is_string($favicon)) {\n"
         "                $tags[] = ['tag' => 'link', 'rel' => 'icon', 'href' => secure_url($favicon)];\n"
         "            }\n\n"
@@ -695,7 +713,14 @@ def main() -> None:
             ",u(`a`,{href:`${window.location.pathname.split(`/panel/`)[0]}/panel/vizion-extensions`,"
             "title:`Vizion Extension`,className:`flex shrink-0 flex-col items-center justify-center "
             "gap-1 rounded-xl px-2 py-2 text-center text-xs leading-tight text-muted-foreground "
-            "transition hover:bg-popover hover:text-foreground`,children:`Vizion Extension`})"
+            "transition hover:bg-popover hover:text-foreground`,children:`Vizion Extension`}),"
+            "u(`button`,{type:`button`,onClick:async()=>{if(!window.confirm(`Are you sure you want to reset all theme settings?`))return;"
+            "let r=await fetch(`/api/admin/extensions/vizion/reset`,{method:`POST`,headers:{"
+            "`X-Requested-With`: `XMLHttpRequest`,`X-CSRF-TOKEN`:document.querySelector(`meta[name=csrf-token]`)?.getAttribute(`content`)||``,"
+            "`Accept`: `application/json`,`Content-Type`: `application/json`},body:`{}`});"
+            "if(!r.ok)throw Error(`Reset failed (${r.status}).`);window.location.reload()},"
+            "className:`mt-auto flex shrink-0 flex-col items-center justify-center rounded-xl px-2 py-2 "
+            "text-center text-xs leading-tight text-red-400 transition hover:bg-red-500/10`,children:`Reset to Defaults`})"
         )
         if settings.count(return_admin) != 1:
             raise ValueError("Could not locate Vizion settings sidebar.")

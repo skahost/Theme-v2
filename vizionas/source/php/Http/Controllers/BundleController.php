@@ -15,6 +15,89 @@ use Pterodactyl\Services\Themes\ThemeRepository;
 
 final class BundleController
 {
+    public function reset(
+        ExtensionRepository $extensions,
+        ThemeRepository $themes,
+    ): JsonResponse {
+        $manifest = $extensions->discovered()->get('vizion');
+        abort_unless($manifest instanceof ExtensionManifest, 404, 'The Vizion extension is not installed.');
+
+        $settings = $extensions->settings('vizion');
+        $defaults = [
+            'accent' => '#8b5cf6',
+            'sidebar' => 'left',
+            'density' => 'comfortable',
+            'blur' => 16,
+            'logoHeight' => 48,
+            'favicon' => null,
+            'metaTitle' => '',
+            'metaDescription' => '',
+            'seoBanner' => null,
+            'allowIndexing' => false,
+            'metaThemeColor' => '#101114',
+            'baseColor' => '#21163a',
+            'socialLinks' => [],
+            'discordEnabled' => false,
+            'discordGuildId' => '',
+            'discordInvite' => '',
+            'announcement' => '',
+            'announcementEnabled' => false,
+            'announcementPosition' => 'top',
+            'announcementColor' => '#21163a',
+            'announcementIcon' => 'megaphone',
+            'announcementDismissible' => true,
+            'ctaColor' => '#8b5cf6',
+            'ctaTitle' => '',
+            'ctaUrl' => '',
+            'glassmorphism' => true,
+            'dashboardBackground' => false,
+            'font' => 'inter',
+            'tagline' => 'Every server, one place.',
+            'liveStats' => true,
+        ];
+
+        foreach ($defaults as $key => $value) {
+            foreach (['set', 'put', 'forget'] as $method) {
+                if (! is_callable([$settings, $method])) {
+                    continue;
+                }
+                try {
+                    if ($method === 'forget') {
+                        $settings->{$method}($key);
+                        continue;
+                    }
+                    $settings->{$method}($key, $value);
+                    break;
+                } catch (\Throwable) {
+                    // Continue with the next supported settings repository API.
+                }
+            }
+        }
+
+        $cacheDirectories = [
+            storage_path('framework/cache'),
+            storage_path('framework/cache/data'),
+            storage_path('framework/views'),
+            storage_path('framework/sessions'),
+        ];
+        foreach ($cacheDirectories as $directory) {
+            if (! is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+        }
+
+        if (method_exists($this, 'clearLaravelCaches')) {
+            $this->clearLaravelCaches();
+        }
+
+        return new JsonResponse([
+            'data' => [
+                'reset' => true,
+                'themeActive' => $themes->active() === 'vizion',
+            ],
+        ]);
+    }
+
     public function masterStatus(ExtensionRepository $extensions, ThemeRepository $themes): JsonResponse
     {
         return new JsonResponse([

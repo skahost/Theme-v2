@@ -3,7 +3,6 @@ import { jsx, jsxs } from 'react/jsx-runtime';
 import {
     Alert,
     Button,
-    Dialog,
     FileInput,
     http,
     httpErrorToHuman,
@@ -672,116 +671,137 @@ export default function VizionExtensionHub() {
                       }),
                   }),
             configuring &&
-                jsxs(Dialog, {
-                    open: true,
-                    title: `${configurationName} settings`,
-                    preventExternalClose: configSaving,
-                    hideCloseIcon: configSaving,
-                    onClose: () => setConfiguring(null),
-                    children: [
-                        jsx(SpinnerOverlay, { visible: configSaving }),
-                        configError &&
-                            jsx(Alert, {
-                                type: 'danger',
-                                children: jsx('span', { children: configError }),
+                jsx('div', {
+                    role: 'dialog',
+                    'aria-modal': 'true',
+                    'aria-label': `${configurationName} settings`,
+                    className: 'fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4',
+                    onKeyDown: (event) => {
+                        if (event.key === 'Escape' && !configSaving) {
+                            setConfiguring(null);
+                        }
+                    },
+                    children: jsxs('div', {
+                        className: 'glass max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-hidden rounded-2xl border border-border bg-card shadow-2xl',
+                        children: [
+                            jsxs('header', {
+                                className: 'flex items-center justify-between border-b border-border px-5 py-4',
+                                children: [
+                                    jsx('h2', {
+                                        className: 'text-lg font-semibold',
+                                        children: `${configurationName} settings`,
+                                    }),
+                                    jsx(Button, {
+                                        type: 'button',
+                                        isSecondary: true,
+                                        size: 'xsmall',
+                                        disabled: configSaving,
+                                        onClick: () => setConfiguring(null),
+                                        children: 'Close',
+                                    }),
+                                ],
                             }),
-                        configNotice &&
-                            jsx('p', {
-                                role: 'status',
-                                className: 'mb-3 text-sm text-muted-foreground',
-                                children: configNotice,
-                            }),
-                        configLoading
-                            ? jsx('div', {
-                                  className: 'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center',
-                                  children: jsx(Spinner, { size: 'large', centered: true }),
-                              })
-                            : !configRegistered || configSchema.length === 0
-                              ? jsx('div', {
-                                    className:
-                                        'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center text-center text-sm text-muted-foreground',
-                                    children: !configuringExtension?.enabled
-                                        ? 'Enable this extension to load its settings.'
-                                        : configRegistered
-                                          ? "This extension doesn't register any settings."
-                                          : 'This extension has not registered settings.',
-                                })
-                              : jsxs('div', {
-                                    className: 'flex h-[min(30rem,calc(100dvh-14rem))] flex-col',
-                                    children: [
-                                        configSections.length > 1 &&
-                                            jsx('div', {
-                                                className: 'mb-4 shrink-0 border-b border-border pb-4',
-                                                children: jsxs('label', {
-                                                    className: 'block space-y-1 text-sm font-medium',
-                                                    children: [
-                                                        'Section',
-                                                        jsx(Select, {
-                                                            value:
-                                                                activeConfigSection?.name ??
-                                                                configSections[0]?.name ??
-                                                                'General',
-                                                            options: configSections.map((section) => ({
-                                                                value: section.name,
-                                                                label: section.name,
-                                                            })),
-                                                            disabled: configSaving,
-                                                            onChange: (value) => setConfigSection(String(value)),
-                                                        }),
-                                                    ],
-                                                }),
-                                            }),
-                                        jsx('div', {
-                                            className: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1',
-                                            children: activeConfigSection?.fields.map((field) =>
-                                                field.field === 'toggle'
-                                                    ? jsx('div', {
-                                                          className: 'mb-5',
-                                                          children: renderConfigControl(field),
-                                                      }, field.input)
-                                                    : jsxs(
-                                                          'div',
-                                                          {
-                                                              className: 'mb-5 text-sm',
-                                                              children: [
-                                                                  jsx('label', {
-                                                                      className: 'mb-1 block font-medium',
-                                                                      children: field.label || field.input,
-                                                                  }),
-                                                                  renderConfigControl(field),
-                                                                  field.help &&
-                                                                      jsx('p', {
-                                                                          className: 'mt-1 text-xs text-muted-foreground',
-                                                                          children: field.help,
-                                                                      }),
-                                                              ],
-                                                          },
-                                                          field.input
-                                                      )
-                                            ),
+                            jsxs('div', {
+                                className: 'relative max-h-[calc(100dvh-10rem)] overflow-y-auto p-5',
+                                children: [
+                                    jsx(SpinnerOverlay, { visible: configSaving }),
+                                    configError &&
+                                        jsx(Alert, {
+                                            type: 'danger',
+                                            children: jsx('span', { children: configError }),
                                         }),
-                                    ],
-                                }),
-                        jsxs('div', {
-                            className: 'mt-6 flex flex-wrap justify-end gap-2',
-                            children: [
-                                jsx(Button, {
-                                    type: 'button',
-                                    isSecondary: true,
-                                    disabled: configSaving,
-                                    onClick: () => setConfiguring(null),
-                                    children: 'Cancel',
-                                }),
-                                jsx(Button, {
-                                    type: 'button',
-                                    disabled: configSaving || !configRegistered || configSchema.length === 0,
-                                    isLoading: configSaving,
-                                    onClick: () => void saveConfig(),
-                                    children: 'Save Settings',
-                                }),
-                            ],
-                        }),
-                    ],
+                                    configNotice &&
+                                        jsx('p', {
+                                            role: 'status',
+                                            className: 'mb-3 text-sm text-muted-foreground',
+                                            children: configNotice,
+                                        }),
+                                    configLoading
+                                        ? jsx('div', {
+                                              className: 'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center',
+                                              children: jsx(Spinner, { size: 'large', centered: true }),
+                                          })
+                                        : !configRegistered || configSchema.length === 0
+                                          ? jsx('div', {
+                                                className: 'flex h-[min(30rem,calc(100dvh-14rem))] items-center justify-center text-center text-sm text-muted-foreground',
+                                                children: !configuringExtension?.enabled
+                                                    ? 'Enable this extension to load its settings.'
+                                                    : configRegistered
+                                                      ? "This extension doesn't register any settings."
+                                                      : 'This extension has not registered settings.',
+                                            })
+                                          : jsxs('div', {
+                                                className: 'flex h-[min(30rem,calc(100dvh-14rem))] flex-col',
+                                                children: [
+                                                    configSections.length > 1 &&
+                                                        jsx('div', {
+                                                            className: 'mb-4 shrink-0 border-b border-border pb-4',
+                                                            children: jsxs('label', {
+                                                                className: 'block space-y-1 text-sm font-medium',
+                                                                children: [
+                                                                    'Section',
+                                                                    jsx(Select, {
+                                                                        value: activeConfigSection?.name ?? configSections[0]?.name ?? 'General',
+                                                                        options: configSections.map((section) => ({
+                                                                            value: section.name,
+                                                                            label: section.name,
+                                                                        })),
+                                                                        disabled: configSaving,
+                                                                        onChange: (value) => setConfigSection(String(value)),
+                                                                    }),
+                                                                ],
+                                                            }),
+                                                        }),
+                                                    jsx('div', {
+                                                        className: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-1',
+                                                        children: activeConfigSection?.fields.map((field) =>
+                                                            field.field === 'toggle'
+                                                                ? jsx('div', {
+                                                                      className: 'mb-5',
+                                                                      children: renderConfigControl(field),
+                                                                  }, field.input)
+                                                                : jsxs('div', {
+                                                                      className: 'mb-5 text-sm',
+                                                                      children: [
+                                                                          jsx('label', {
+                                                                              className: 'mb-1 block font-medium',
+                                                                              children: field.label || field.input,
+                                                                          }),
+                                                                          renderConfigControl(field),
+                                                                          field.help &&
+                                                                              jsx('p', {
+                                                                                  className: 'mt-1 text-xs text-muted-foreground',
+                                                                                  children: field.help,
+                                                                              }),
+                                                                      ],
+                                                                  }, field.input)
+                                                        ),
+                                                    }),
+                                                ],
+                                            }),
+                                    jsxs('div', {
+                                        className: 'mt-6 flex flex-wrap justify-end gap-2',
+                                        children: [
+                                            jsx(Button, {
+                                                type: 'button',
+                                                isSecondary: true,
+                                                disabled: configSaving,
+                                                onClick: () => setConfiguring(null),
+                                                children: 'Cancel',
+                                            }),
+                                            jsx(Button, {
+                                                type: 'button',
+                                                disabled: configSaving || !configRegistered || configSchema.length === 0,
+                                                isLoading: configSaving,
+                                                onClick: () => void saveConfig(),
+                                                children: 'Save Settings',
+                                            }),
+                                        ],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
                 }),
             jsx('p', {
                 className: 'text-xs text-muted-foreground',
