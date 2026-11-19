@@ -8,15 +8,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "vizion-suite-bundle.zip"
+TELEGRAM = ROOT / "Telegram.zip"
 OUTPUT = ROOT / "vizionas.pteroext"
 SOURCE = ROOT / "vizionas" / "source"
 PREFIX_RENAMES = {"demo": ("dm", "dmo"), "mcp": ("mcp", "mcpai")}
 PACKAGE_VERSIONS = {
-    "demo": "1.0.1",
-    "drift-register": "1.6.3",
-    "drift-mod": "1.1.1",
-    "drift-plugins": "1.5.1",
-    "drift-properties": "1.0.1",
+    "demo": "1.0.0",
+    "drift-register": "1.6.1",
+    "drift-mod": "1.1.0",
+    "drift-plugins": "1.5.0",
+    "drift-properties": "1.0.0",
     "mcp": "1.1.1",
 }
 PACKAGE_NAMES = {
@@ -88,9 +89,8 @@ def patch_vizion_provider(provider: bytes) -> bytes:
         "    {\n"
     )
     reset_route_methods = (
-        "    protected function registerApiRoutes(?string $directory = null): void\n"
+        "    private function registerVizionRoutes(): void\n"
         "    {\n"
-        "        parent::registerApiRoutes($directory);\n"
         "        $this->app['router']->post('/api/admin/extensions/vizion/reset', "
         "[\\Vizion\\Http\\Controllers\\BundleController::class, 'reset']);\n"
         "    }\n\n"
@@ -98,6 +98,14 @@ def patch_vizion_provider(provider: bytes) -> bytes:
     if source.count(reset_route_marker) != 1:
         raise ValueError("Could not locate Vizion Provider reset route insertion point.")
     source = source.replace(reset_route_marker, reset_route_methods + reset_route_marker, 1)
+    boot_marker = "        $this->registerHeadTags(fn (): array => $this->headTags());"
+    if source.count(boot_marker) != 1:
+        raise ValueError("Could not locate Vizion Provider boot head-tag registration.")
+    source = source.replace(
+        boot_marker,
+        "        $this->registerVizionRoutes();\n" + boot_marker,
+        1,
+    )
 
     marker = (
         "ExtensionSettingDefinition::make('metaDescription', 'metaDescription', '')"
@@ -257,7 +265,24 @@ def patch_theme_stylesheet(stylesheet: bytes) -> bytes:
 
 
 def patch_settings_page(page: bytes) -> bytes:
-    source = 'import{View as PreviewView}from"@pterodactyl/sdk/theme";' + page.decode()
+    source = (
+        'import{Component as VizionPreviewComponent}from"react";'
+        'import{View as PreviewView}from"@pterodactyl/sdk/theme";'
+        + page.decode()
+    )
+    boundary_marker = "function H({title:e,children:t})"
+    if source.count(boundary_marker) != 1:
+        raise ValueError("Could not locate Vizion settings error-boundary insertion point.")
+    source = source.replace(
+        boundary_marker,
+        "class VizionPreviewBoundary extends VizionPreviewComponent{"
+        "constructor(e){super(e);this.state={failed:false}}"
+        "static getDerivedStateFromError(){return{failed:true}}"
+        "render(){return this.state.failed?l(`div`,{role:`alert`,className:`rounded-xl border border-destructive/40 p-4 text-sm text-destructive`,children:`Live preview is unavailable; the rest of the theme editor is still available.`}):this.props.children}"
+        "}"
+        + boundary_marker,
+        1,
+    )
 
     state_defaults = (
         "metaDescription:``,seoBanner:null,announcement:``,announcementEnabled:!1,"
@@ -530,11 +555,14 @@ def patch_settings_page(page: bytes) -> bytes:
     ]})})})]})]})}"""
     preview = (
         "l(`div`,{className:`flex min-h-[65dvh] flex-1 justify-center overflow-hidden rounded-2xl "
-        "border border-border/70 bg-background/40 p-3 sm:p-6 xl:min-h-0`,style:{overflow:`auto`},"
+        "border border-border/70 bg-background/40 p-3 sm:p-6 xl:min-h-0`,"
+        "style:{height:`440px`,overflow:`hidden`,"
+        "'--vizion-base-color':t.baseColor,'--vizion-accent':t.accent,"
+        "'--vizion-blur':`${t.blur}px`,colorScheme:document.documentElement.classList.contains(`dark`)?`dark`:`light`},"
         "children:l(`div`,{className:`origin-top-left transition-[transform,width] duration-300`,"
-        "style:{width:b===`mobile`?`646px`:`153.8462%`,transform:`scale(.65)`,"
+        "style:{width:`1280px`,height:`800px`,transform:`scale(.55)`,"
         "transformOrigin:`top left`,pointerEvents:`none`},'aria-hidden':!0,"
-        "children:l(PreviewView,{name:`layout.app`,children:l(PreviewView,{name:`page.dashboard`})})})})"
+        "children:l(VizionPreviewBoundary,{children:l(PreviewView,{name:`layout.app`,children:l(PreviewView,{name:`page.dashboard`})})})})})"
         "]})]})}"
     )
     source = source[:preview_begin] + preview + source[preview_finish:]
@@ -546,19 +574,19 @@ def patch_settings_page(page: bytes) -> bytes:
 
 
 def main() -> None:
-    with zipfile.ZipFile(BUNDLE) as bundle:
+    with zipfile.ZipFile(TELEGRAM) as telegram, zipfile.ZipFile(BUNDLE) as bundle:
         packages = []
         seen_ids = set()
-        for name in bundle.namelist():
-            if not name.startswith("extensions/") or not name.endswith(".pteroext"):
+        for name in telegram.namelist():
+            if not name.startswith("Telegram/") or not name.endswith((".pteroext", ".pterext")):
                 continue
 
-            package = bundle.read(name)
+            package = telegram.read(name)
             with zipfile.ZipFile(io.BytesIO(package)) as archive:
                 manifest = json.loads(archive.read("extension.json"))
             identifier = manifest["id"]
             if identifier.lower() == "branding":
-                raise ValueError("The Branding package cannot be redistributed.")
+                continue
             if identifier in seen_ids:
                 raise ValueError(f"Duplicate bundled extension id: {identifier}")
             seen_ids.add(identifier)
@@ -621,7 +649,7 @@ def main() -> None:
             entries = {item.filename: (item, original.read(item.filename)) for item in original.infolist()}
 
         manifest = json.loads(entries["extension.json"][1])
-        manifest["version"] = "1.1.9"
+        manifest["version"] = "1.2.0"
         manifest["ui"]["screens"].append(
             {
                 "id": "extensions",
@@ -698,9 +726,29 @@ def main() -> None:
             entries[stylesheet_path] = (stylesheet_info, patch_theme_stylesheet(stylesheet))
 
         settings_info, settings = entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"]
-        if b"noindex" in settings:
-            raise ValueError("Vizion settings chunk unexpectedly contains SEO robots text.")
-        entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings)
+        settings = patch_settings_page(settings).decode()
+        return_admin = (
+            "})]}),u(`section`,{className:`min-w-0 space-y-6 p-4 sm:p-6 "
+            "xl:max-h-dvh xl:overflow-y-auto xl:border-r xl:border-border`"
+        )
+        extension_link = (
+            ",u(`a`,{href:window.location.pathname.split('/panel/')[0]+'/panel/vizion-extensions',"
+            "title:`Vizion Extension`,className:`flex shrink-0 flex-col items-center justify-center "
+            "gap-1 rounded-xl px-2 py-2 text-center text-xs leading-tight text-muted-foreground "
+            "transition hover:bg-popover hover:text-foreground`,children:`Vizion Extension`}),"
+            "u(`button`,{type:`button`,onClick:async()=>{if(!window.confirm('Are you sure you want to reset all theme settings?'))return;"
+            "let r=await fetch('/api/admin/extensions/vizion/reset',{method:'POST',headers:{"
+            "'X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]')?.getAttribute('content')||'',"
+            "'Accept':'application/json','Content-Type':'application/json'},body:'{}'});"
+            "if(!r.ok)throw Error('Reset failed ('+r.status+').');window.location.reload()},"
+            "className:`mt-auto flex shrink-0 flex-col items-center justify-center rounded-xl px-2 py-2 "
+            "text-center text-xs leading-tight text-red-400 transition hover:bg-red-500/10`,children:`Reset to Defaults`})"
+        )
+        if settings.count(return_admin) != 1:
+            raise ValueError("Could not locate Vizion settings sidebar.")
+        link_position = settings.index(return_admin) + 2
+        settings = settings[:link_position] + extension_link + settings[link_position:]
+        entries["dist/chunk.VizionSettingsPage.CBuhquzc.js"] = (settings_info, settings.encode())
 
         shell_info, shell = entries["dist/chunk.AppShell.BcbKZzqm.js"]
         shell = shell.decode()
@@ -710,6 +758,29 @@ def main() -> None:
         shell = shell.replace(
             settings_import,
             'import{n as r}from"./chunk.settings.sdDqqCB1.js";import{useEffect as Ve,useState as Se}from"react";',
+            1,
+        )
+        sdk_components = 'from"@pterodactyl/sdk";var p='
+        if shell.count(sdk_components) != 1:
+            raise ValueError("Could not locate Vizion AppShell component imports.")
+        shell = shell.replace(
+            sdk_components,
+            'from"@pterodactyl/sdk";function isSafeComponentType(e){return typeof e===`function`||typeof e===`string`||e!==null&&typeof e===`object`&&`$$typeof`in e}var MainComponent=isSafeComponentType(i)?i:`main`,SlotComponent=isSafeComponentType(a)?a:o;var p=',
+            1,
+        )
+        shell = shell.replace("s(a,{name:", "s(SlotComponent,{name:")
+        shell = shell.replace("s(i,{className:", "s(MainComponent,{className:")
+        icon_marker = (
+            "let r=t.id===`dashboard`?e:t.id===`admin`?g:v,"
+            "i=t.id===`admin`?`Admin Core`:t.id===`account`?`Account Overview`:`Dashboard`,"
+        )
+        if shell.count(icon_marker) != 1:
+            raise ValueError("Could not locate Vizion sidebar icon selection.")
+        shell = shell.replace(
+            icon_marker,
+            "let r0=t.id===`dashboard`?e:t.id===`admin`?g:v,"
+            "r=isSafeComponentType(r0)?r0:`span`,"
+            "i=t.id===`admin`?`Admin Core`:t.id===`account`?`Account Overview`:`Dashboard`,",
             1,
         )
         overlay_marker = "function C({model:e,children:t})"
@@ -739,12 +810,12 @@ l(`p`,{className:`px-3 py-2 text-xs text-muted-foreground`,children:`Live member
             raise ValueError("Could not locate the Vizion admin header and sidebar controls.")
         shell = shell.replace(header_actions, "!l&&s(S,{model:e,showActions:!1}),", 1)
         shell = shell.replace(sidebar_visibility, "!l&&c(`aside`", 1)
-        main_mount = "s(i,{className:`min-w-0 flex-1`,children:t})"
+        main_mount = "s(MainComponent,{className:`min-w-0 flex-1`,children:t})"
         if shell.count(main_mount) != 1:
             raise ValueError("Could not locate Vizion dashboard content mount.")
         shell = shell.replace(
             main_mount,
-            "c(o,{children:[s(i,{className:`min-w-0 flex-1`,children:t}),s(A,{})]})",
+            "c(o,{children:[s(MainComponent,{className:`min-w-0 flex-1`,children:t}),s(A,{})]})",
             1,
         )
         entries["dist/chunk.AppShell.BcbKZzqm.js"] = (shell_info, shell.encode())
